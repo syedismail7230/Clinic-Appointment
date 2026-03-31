@@ -139,7 +139,7 @@ export default function QueueView() {
       {/* Queue List */}
       <Card className="border-none shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
+          <table className="w-full text-sm text-left min-w-[800px]">
             <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b">
               <tr>
                 <th className="px-6 py-4 font-medium">Token</th>
@@ -205,8 +205,9 @@ export default function QueueView() {
             
             {medicines.length > 0 ? (
               <div className="border rounded-xl overflow-hidden">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left min-w-[600px]">
+                    <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b">
                     <tr>
                       <th className="px-3 py-2 font-medium w-12">Sl No.</th>
                       <th className="px-3 py-2 font-medium">Medicine Name</th>
@@ -291,7 +292,8 @@ export default function QueueView() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                  </table>
+                </div>
               </div>
             ) : (
               <div className="text-center py-8 border border-dashed rounded-xl bg-gray-50 text-gray-500 text-sm">

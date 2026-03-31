@@ -56,14 +56,6 @@ export default function PatientHome() {
             <FileText className="w-4 h-4 mr-2" />
             My Records
           </Button>
-          <Button 
-            variant="outline" 
-            size="icon" 
-            className="rounded-full bg-white shadow-sm border-none"
-            onClick={() => setShowScanner(true)}
-          >
-            <QrCode className="w-5 h-5" />
-          </Button>
         </div>
       </div>
 
@@ -84,7 +76,7 @@ export default function PatientHome() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 pb-6">
+        <div className="flex-1 overflow-y-auto px-6 pb-28">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Nearby Clinics</h2>
           <div className="space-y-4">
             {filteredClinics.map(clinic => (
@@ -118,6 +110,18 @@ export default function PatientHome() {
             </Button>
           </div>
         </div>
+      </div>
+
+      {/* Floating Action Button for QR Scanner */}
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40">
+        <Button 
+          size="lg" 
+          className="rounded-full shadow-2xl h-14 px-6 bg-black text-white hover:bg-gray-800 font-bold text-lg"
+          onClick={() => setShowScanner(true)}
+        >
+          <QrCode className="w-6 h-6 mr-2" />
+          Scan QR
+        </Button>
       </div>
 
       {/* QR Scanner Overlay */}

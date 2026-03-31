@@ -96,7 +96,7 @@ export default function ClinicView() {
                 <h2 className="text-xl font-bold tracking-tight mb-4">
                   Select Time <span className="text-gray-500 text-base font-normal ml-2">{format(selectedDate, 'MMM d')}</span>
                 </h2>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {doctor.availableSlots.map(slot => (
                     <button
                       key={slot}

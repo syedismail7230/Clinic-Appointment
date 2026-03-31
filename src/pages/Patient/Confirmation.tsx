@@ -130,7 +130,7 @@ export default function Confirmation() {
               
               {myQueueItem.medicines && myQueueItem.medicines.length > 0 && (
                 <div className="mb-4 overflow-x-auto">
-                  <table className="w-full text-sm text-left border-collapse">
+                  <table className="w-full text-sm text-left border-collapse min-w-[600px]">
                     <thead className="text-xs text-blue-800 uppercase bg-blue-100/50 border-b border-blue-200">
                       <tr>
                         <th className="px-3 py-2 font-medium">Sl No.</th>

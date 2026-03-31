@@ -128,7 +128,7 @@ export default function AppointmentsView() {
           </div>
           
           <div className="overflow-x-auto flex-1">
-            <table className="w-full text-sm text-left">
+            <table className="w-full text-sm text-left min-w-[800px]">
               <thead className="text-xs text-gray-500 uppercase bg-gray-50/80 border-b">
                 <tr>
                   <th className="px-6 py-4 font-medium">Time</th>

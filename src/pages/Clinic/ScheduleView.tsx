@@ -99,20 +99,23 @@ export default function ScheduleView() {
         <Card className="md:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg">Available Slots</CardTitle>
-            <Button onClick={handleSave} size="sm">
+            <Button onClick={handleSave} size="sm" className="hidden sm:flex">
               <Save className="w-4 h-4 mr-2" />
               Save Changes
             </Button>
+            <Button onClick={handleSave} size="icon" className="sm:hidden">
+              <Save className="w-4 h-4" />
+            </Button>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-2 mb-6">
+            <div className="flex flex-col sm:flex-row gap-2 mb-6">
               <Input 
                 type="time" 
-                className="w-40"
+                className="w-full sm:w-40"
                 value={newTime}
                 onChange={(e) => setNewTime(e.target.value)}
               />
-              <Button onClick={handleAddSlot} variant="secondary">
+              <Button onClick={handleAddSlot} variant="secondary" className="w-full sm:w-auto">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Slot
               </Button>
