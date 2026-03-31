@@ -161,12 +161,6 @@ export default function PatientHome() {
               </div>
             )}
           </div>
-          
-          <div className="mt-8 text-center">
-            <Button variant="link" onClick={() => navigate('/demo-qr')} className="text-gray-500">
-              View Demo QR Codes
-            </Button>
-          </div>
         </div>
       </motion.div>
 
