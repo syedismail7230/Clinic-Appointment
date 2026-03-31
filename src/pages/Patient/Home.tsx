@@ -9,6 +9,7 @@ import { MOCK_CLINICS } from "@/lib/mockData";
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import { motion } from "motion/react";
 
 // Fix for default marker icon in react-leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -22,6 +23,7 @@ export default function PatientHome() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [showScanner, setShowScanner] = useState(false);
+  const [isSheetExpanded, setIsSheetExpanded] = useState(true);
 
   const filteredClinics = MOCK_CLINICS.filter(c => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -94,10 +96,31 @@ export default function PatientHome() {
       </div>
 
       {/* Bottom Sheet Area */}
-      <div className="relative z-10 mt-auto bg-white rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.1)] flex flex-col h-[70vh]">
-        <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mt-4 mb-6" />
+      <motion.div 
+        className="relative z-10 mt-auto bg-white rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.1)] flex flex-col overflow-hidden"
+        initial={false}
+        animate={{ height: isSheetExpanded ? "70vh" : "180px" }}
+        transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={0.2}
+        onDragEnd={(e, { offset, velocity }) => {
+          if (offset.y > 50 || velocity.y > 500) {
+            setIsSheetExpanded(false);
+          } else if (offset.y < -50 || velocity.y < -500) {
+            setIsSheetExpanded(true);
+          }
+        }}
+      >
+        {/* Drag Handle Area */}
+        <div 
+          className="w-full pt-4 pb-2 cursor-grab active:cursor-grabbing flex justify-center"
+          onClick={() => setIsSheetExpanded(!isSheetExpanded)}
+        >
+          <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+        </div>
         
-        <div className="px-6 mb-6">
+        <div className="px-6 mb-6 shrink-0">
           <h1 className="text-3xl font-bold mb-4 tracking-tight">Find a clinic</h1>
           <div className="relative">
             <div className="absolute left-4 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-black rounded-full" />
@@ -106,11 +129,12 @@ export default function PatientHome() {
               placeholder="Where to?" 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              onFocus={() => setIsSheetExpanded(true)}
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 pb-28">
+        <div className="flex-1 overflow-y-auto px-6 pb-28" style={{ opacity: isSheetExpanded ? 1 : 0, transition: 'opacity 0.2s' }}>
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Nearby Clinics</h2>
           <div className="space-y-4">
             {filteredClinics.map(clinic => (
@@ -144,7 +168,7 @@ export default function PatientHome() {
             </Button>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Floating Action Button for QR Scanner */}
       <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40">
