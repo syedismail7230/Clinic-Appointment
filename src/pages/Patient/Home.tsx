@@ -6,6 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Scanner } from "@yudiel/react-qr-scanner";
 import { MOCK_CLINICS } from "@/lib/mockData";
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix for default marker icon in react-leaflet
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
 export default function PatientHome() {
   const navigate = useNavigate();
@@ -35,11 +46,34 @@ export default function PatientHome() {
 
   return (
     <div className="min-h-screen bg-gray-100 relative overflow-hidden flex flex-col">
-      {/* Simulated Map Background */}
-      <div className="absolute inset-0 z-0 opacity-40 pointer-events-none" style={{
-        backgroundImage: 'radial-gradient(#000 1px, transparent 1px)',
-        backgroundSize: '20px 20px'
-      }} />
+      {/* Map Background */}
+      <div className="absolute inset-0 z-0">
+        <MapContainer 
+          center={[12.9716, 77.5946]} // Default to Bangalore coordinates based on the image
+          zoom={13} 
+          zoomControl={false}
+          className="w-full h-full"
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          />
+          {/* Mock markers for clinics */}
+          {filteredClinics.map((clinic, index) => {
+            // Generate some mock coordinates near Bangalore center for the demo
+            const lat = 12.9716 + (index * 0.01) - 0.005;
+            const lng = 77.5946 + (index * 0.01) - 0.005;
+            return (
+              <Marker key={clinic.id} position={[lat, lng]}>
+                <Popup>
+                  <div className="font-semibold">{clinic.name}</div>
+                  <div className="text-xs text-gray-500">{clinic.address}</div>
+                </Popup>
+              </Marker>
+            );
+          })}
+        </MapContainer>
+      </div>
 
       {/* Top Bar */}
       <div className="relative z-10 p-6 pt-12 flex justify-between items-center">
