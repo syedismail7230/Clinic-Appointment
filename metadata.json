@@ -1,0 +1,5 @@
+{
+  "name": "QuickCare Booking",
+  "description": "A lightweight doctor appointment booking platform for clinics and patients.",
+  "requestFramePermissions": ["camera"]
+}
