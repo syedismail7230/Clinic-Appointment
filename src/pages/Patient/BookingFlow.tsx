@@ -123,7 +123,7 @@ export default function BookingFlow() {
                 <div className="relative flex">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
                     <Phone className="w-5 h-5 text-gray-400" />
-                    <span className="text-gray-500 font-medium border-r border-gray-300 pr-2">+1</span>
+                    <span className="text-gray-500 font-medium border-r border-gray-300 pr-2">+91</span>
                   </div>
                   <Input 
                     type="tel"
