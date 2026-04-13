@@ -78,7 +78,7 @@ export default function PatientRecords() {
             </div>
             <h2 className="text-3xl font-bold text-gray-900 mb-2">Enter Code</h2>
             <p className="text-gray-500 text-center mb-8 text-lg">
-              Sent to +1 {phone}
+              Sent to +91 {phone}
             </p>
             
             <Input 
