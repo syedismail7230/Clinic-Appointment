@@ -1,23 +1,65 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Calendar as CalendarIcon, Clock, Plus, Trash2, Save } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MOCK_CLINICS } from "@/lib/mockData";
+import { api } from "@/lib/api";
 
 export default function ScheduleView() {
-  const clinicDoctors = MOCK_CLINICS[0].doctors;
-  const [selectedDoctor, setSelectedDoctor] = useState(clinicDoctors[0].id);
+  const [clinicDoctors, setClinicDoctors] = useState<any[]>([]);
+  const [selectedDoctor, setSelectedDoctor] = useState("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [loading, setLoading] = useState(true);
   
-  // Mock state for availability: { [doctorId_date]: ["09:00 AM", "09:30 AM"] }
+  // Real state from backend: { [doctorId_date]: ["09:00 AM", ...] }
   const [availability, setAvailability] = useState<Record<string, string[]>>({});
   const [newTime, setNewTime] = useState("");
+
+  const fetchScheduleAndDoctors = async () => {
+      try {
+        setLoading(true);
+        const [clinics, slots] = await Promise.all([
+          api.get('/clinics'),
+          api.get('/admin/slots')
+        ]);
+        
+        if (clinics.length > 0) {
+          const docs = clinics[0].doctors || [];
+          setClinicDoctors(docs);
+          if (docs.length > 0 && !selectedDoctor) setSelectedDoctor(docs[0].id);
+        }
+        
+        // Group slots by doctor and date
+        const grouped: Record<string, string[]> = {};
+        for (const slot of slots) {
+          // If a slot has no date, we can treat it as recurring, but for this view, we map it exactly as it came from the DB
+          const dateKey = slot.date || new Date().toISOString().split('T')[0]; // fallback
+          const key = `${slot.doctor_id}_${dateKey}`;
+          if (!grouped[key]) grouped[key] = [];
+          if (!grouped[key].includes(slot.slot_time)) grouped[key].push(slot.slot_time);
+        }
+        
+        // Sort individual time lists
+        Object.keys(grouped).forEach(k => {
+          grouped[k].sort();
+        });
+        
+        setAvailability(grouped);
+      } catch (error) {
+        console.error('Failed to fetch schedule data:', error);
+      } finally {
+        setLoading(false);
+      }
+  };
+
+  useEffect(() => {
+    fetchScheduleAndDoctors();
+  }, []);
 
   const currentKey = `${selectedDoctor}_${selectedDate}`;
   const currentSlots = availability[currentKey] || [];
 
-  const handleAddSlot = () => {
+  const handleAddSlot = async () => {
     if (!newTime) return;
     
     // Format time to AM/PM for consistency
@@ -28,30 +70,41 @@ export default function ScheduleView() {
     const formattedTime = `${formattedHour.toString().padStart(2, '0')}:${minutes} ${ampm}`;
 
     if (!currentSlots.includes(formattedTime)) {
-      setAvailability({
-        ...availability,
-        [currentKey]: [...currentSlots, formattedTime].sort((a, b) => {
-          // Simple sort logic for AM/PM times
-          const timeA = new Date(`1970/01/01 ${a}`);
-          const timeB = new Date(`1970/01/01 ${b}`);
-          return timeA.getTime() - timeB.getTime();
-        })
-      });
+      try {
+        await api.post('/admin/slots', {
+          doctor_id: selectedDoctor,
+          slot_time: formattedTime,
+          date: selectedDate
+        });
+        
+        setAvailability(prev => ({
+          ...prev,
+          [currentKey]: [...(prev[currentKey] || []), formattedTime].sort()
+        }));
+      } catch (error) {
+        console.error('Failed to add slot:', error);
+      }
     }
     setNewTime("");
   };
 
-  const handleRemoveSlot = (timeToRemove: string) => {
-    setAvailability({
-      ...availability,
-      [currentKey]: currentSlots.filter(t => t !== timeToRemove)
-    });
+  const handleRemoveSlot = async (timeToRemove: string) => {
+    try {
+      await api.delete('/admin/slots', {
+        doctor_id: selectedDoctor,
+        slot_time: timeToRemove,
+        date: selectedDate
+      });
+      
+      setAvailability(prev => ({
+        ...prev,
+        [currentKey]: prev[currentKey].filter(t => t !== timeToRemove)
+      }));
+    } catch (error) {
+      console.error('Failed to remove slot:', error);
+    }
   };
 
-  const handleSave = () => {
-    // In a real app, this would save to the backend
-    alert("Availability saved successfully!");
-  };
 
   return (
     <div className="animate-in fade-in duration-300 max-w-4xl mx-auto">
@@ -99,13 +152,7 @@ export default function ScheduleView() {
         <Card className="md:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg">Available Slots</CardTitle>
-            <Button onClick={handleSave} size="sm" className="hidden sm:flex">
-              <Save className="w-4 h-4 mr-2" />
-              Save Changes
-            </Button>
-            <Button onClick={handleSave} size="icon" className="sm:hidden">
-              <Save className="w-4 h-4" />
-            </Button>
+            <div className="text-sm font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full border border-green-200">Live Synced</div>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col sm:flex-row gap-2 mb-6">

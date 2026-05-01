@@ -4,24 +4,24 @@ import { Button } from "@/components/ui/button";
 
 const PLANS = [
   {
-    name: "Starter",
-    price: "$49",
-    description: "Perfect for solo practitioners.",
-    features: ["1 Clinic Location", "1 Doctor", "Up to 500 bookings/mo", "Basic Queue Management"],
+    name: "Basic",
+    price: "₹0",
+    description: "Essential tools for small clinics.",
+    features: ["1 Clinic Location", "Default Themes", "Self-service Support"],
     popular: false
   },
   {
-    name: "Growth",
-    price: "$149",
-    description: "For growing clinics with multiple staff.",
-    features: ["1 Clinic Location", "Up to 5 Doctors", "Unlimited bookings", "Advanced Queue Management", "Basic Analytics"],
+    name: "Standard",
+    price: "₹599",
+    description: "Production grade platform access.",
+    features: ["Full Queue Management", "Real-time Updates", "QR Customization", "Priority Support", "Razorpay Integrated"],
     popular: true
   },
   {
-    name: "Pro",
-    price: "$299",
-    description: "For multi-branch clinic networks.",
-    features: ["Multiple Locations", "Unlimited Doctors", "Unlimited bookings", "Priority Support", "Advanced Analytics", "Custom Integrations"],
+    name: "Growth",
+    price: "Custom",
+    description: "For multi-chain hospitals.",
+    features: ["White-label Branding", "Dedicated Server", "Custom Features", "API Access"],
     popular: false
   }
 ];

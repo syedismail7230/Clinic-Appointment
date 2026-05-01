@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Users, Clock, CheckCircle2, Activity, Search, UserPlus, MoreVertical, Plus, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { useQueue, updateQueueItem, addQueueItem, PrescriptionItem } from "@/lib/store";
-import { MOCK_CLINICS } from "@/lib/mockData";
+import { api } from "@/lib/api";
 
 export default function QueueView() {
   const queue = useQueue();
@@ -16,21 +16,35 @@ export default function QueueView() {
   
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
   const [walkInForm, setWalkInForm] = useState({ name: '', phone: '', doctor: '' });
-  const clinicDoctors = MOCK_CLINICS[0].doctors;
+  const [clinicDoctors, setClinicDoctors] = useState<any[]>([]);
 
-  const handleUpdateStatus = (id: string, newStatus: string) => {
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      try {
+        const clinics = await api.get('/clinics');
+        if (clinics.length > 0) {
+          setClinicDoctors(clinics[0].doctors || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch doctors:', error);
+      }
+    };
+    fetchDoctors();
+  }, []);
+
+  const handleUpdateStatus = async (id: string, newStatus: string) => {
     if (newStatus === 'completed') {
       setSelectedPatientId(id);
       setPrescription("");
       setMedicines([]);
     } else {
-      updateQueueItem(id, { status: newStatus });
+      await updateQueueItem(id, { status: newStatus });
     }
   };
 
-  const handleCompleteConsultation = () => {
+  const handleCompleteConsultation = async () => {
     if (selectedPatientId) {
-      updateQueueItem(selectedPatientId, { status: 'completed', prescription, medicines });
+      await updateQueueItem(selectedPatientId, { status: 'completed', prescription, medicines });
       setSelectedPatientId(null);
     }
   };
@@ -47,10 +61,10 @@ export default function QueueView() {
     setMedicines(medicines.filter(m => m.id !== id));
   };
 
-  const handleWalkInSubmit = () => {
+  const handleWalkInSubmit = async () => {
     if (!walkInForm.name || !walkInForm.phone || !walkInForm.doctor) return;
     
-    addQueueItem({
+    await addQueueItem({
       id: `q${Date.now()}`,
       patientName: walkInForm.name,
       phone: walkInForm.phone,

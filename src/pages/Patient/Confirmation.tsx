@@ -3,8 +3,8 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { CheckCircle2, MapPin, Clock, Activity, FileText } from "lucide-react";
 import { format, parseISO, isToday } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { MOCK_CLINICS } from "@/lib/mockData";
 import { useQueue } from "@/lib/store";
+import { api } from "@/lib/api";
 
 export default function Confirmation() {
   const { id } = useParams();
@@ -12,13 +12,26 @@ export default function Confirmation() {
   const location = useLocation();
   const state = location.state as { doctorId: string, slot: string, name: string, phone: string, date?: string, queueId?: string } | null;
   
-  const clinic = MOCK_CLINICS.find(c => c.id === id);
-  const doctor = clinic?.doctors.find(d => d.id === state?.doctorId);
-  
-  const queue = useQueue();
+  const [clinic, setClinic] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const queue = useQueue(clinic?.tenant_id);
   const myQueueItem = queue.find(q => q.id === state?.queueId);
 
   const [waitTime, setWaitTime] = useState(15);
+
+  useEffect(() => {
+    const fetchClinic = async () => {
+      try {
+        const data = await api.get(`/clinics/${id}`);
+        setClinic(data);
+      } catch (error) {
+        console.error('Failed to fetch clinic:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchClinic();
+  }, [id]);
 
   useEffect(() => {
     // Simulate real-time wait time updates
@@ -28,9 +41,13 @@ export default function Confirmation() {
     return () => clearInterval(interval);
   }, []);
 
-  if (!clinic || !state || !doctor) {
+  if (loading) return <div className="p-16 text-center">Loading...</div>;
+  if (!clinic || !state) {
     return <div className="p-6 text-center">Booking not found</div>;
   }
+
+  const doctor = clinic.doctors?.find((d: any) => d.id === state.doctorId);
+  if (!doctor) return <div className="p-6 text-center">Doctor not found</div>;
 
   const bookingDate = state.date ? parseISO(state.date) : new Date();
   const dateText = isToday(bookingDate) ? "Today" : format(bookingDate, 'MMM d, yyyy');

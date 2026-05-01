@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Search, FileText, Calendar, Clock, Pill, ShieldCheck } from "lucide-react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -115,7 +116,7 @@ export default function PatientRecords() {
                   <div className="bg-blue-50 px-4 py-3 border-b border-blue-100 flex justify-between items-center">
                     <div className="flex items-center gap-2 text-blue-800 font-medium">
                       <Calendar className="w-4 h-4" />
-                      <span>{new Date().toLocaleDateString()}</span> {/* Using current date as mock */}
+                      <span>{record.date ? format(new Date(record.date), 'MMM d, yyyy') : new Date().toLocaleDateString()}</span>
                     </div>
                     <div className="flex items-center gap-1 text-blue-600 text-sm">
                       <Clock className="w-3.5 h-3.5" />

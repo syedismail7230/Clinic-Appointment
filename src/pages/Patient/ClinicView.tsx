@@ -1,20 +1,38 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, User, Calendar as CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { MOCK_CLINICS } from "@/lib/mockData";
+import { api } from "@/lib/api";
 
 export default function ClinicView() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const clinic = MOCK_CLINICS.find(c => c.id === id);
-  
-  const [selectedDoctor, setSelectedDoctor] = useState(clinic?.doctors[0]?.id);
+  const [clinic, setClinic] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
 
+  useEffect(() => {
+    const fetchClinic = async () => {
+      try {
+        const data = await api.get(`/clinics/${id}`);
+        setClinic(data);
+        if (data.doctors && data.doctors.length > 0) {
+          setSelectedDoctor(data.doctors[0].id);
+        }
+      } catch (error) {
+        console.error('Failed to fetch clinic:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchClinic();
+  }, [id]);
+
+  if (loading) return <div className="p-6 text-center">Loading...</div>;
   if (!clinic) return <div className="p-6 text-center">Clinic not found</div>;
 
   const doctor = clinic.doctors.find(d => d.id === selectedDoctor);

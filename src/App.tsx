@@ -13,6 +13,7 @@ import ClinicLogin from "./pages/Clinic/Login";
 import ClinicDashboard from "./pages/Clinic/Dashboard";
 import PlatformAdminDashboard from "./pages/PlatformAdmin/Dashboard";
 import DemoQR from "./pages/DemoQR";
+import Onboarding from "./pages/Onboarding/Onboarding";
 
 export default function App() {
   return (
@@ -30,7 +31,10 @@ export default function App() {
         <Route path="/admin/dashboard" element={<ClinicDashboard />} />
 
         {/* Platform Admin Routes */}
-        <Route path="/platform" element={<PlatformAdminDashboard />} />
+        <Route path="/platform-admin" element={<PlatformAdminDashboard />} />
+
+        {/* Onboarding */}
+        <Route path="/onboard" element={<Onboarding />} />
 
         {/* Demo QR Route */}
         <Route path="/demo-qr" element={<DemoQR />} />

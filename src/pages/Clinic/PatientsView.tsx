@@ -1,19 +1,30 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, FileText, Phone, Calendar } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-
-const MOCK_PATIENTS = [
-  { id: "1", name: "John Doe", phone: "+1 555-0123", lastVisit: "2023-10-25", totalVisits: 3 },
-  { id: "2", name: "Jane Smith", phone: "+1 555-0198", lastVisit: "2023-10-26", totalVisits: 1 },
-  { id: "3", name: "Alice Johnson", phone: "+1 555-0145", lastVisit: "2023-10-20", totalVisits: 5 },
-];
+import { api } from "@/lib/api";
 
 export default function PatientsView() {
+  const [patients, setPatients] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filteredPatients = MOCK_PATIENTS.filter(p => 
+  useEffect(() => {
+    const fetchPatients = async () => {
+      try {
+        const data = await api.get('/patients');
+        setPatients(data);
+      } catch (error) {
+        console.error('Failed to fetch patients:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPatients();
+  }, []);
+
+  const filteredPatients = patients.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     p.phone.includes(searchTerm)
   );

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { MOCK_QUEUE } from './mockData';
+import { api } from './api';
+import { socket } from './socket';
 
 export interface PrescriptionItem {
   id: string;
@@ -18,55 +19,55 @@ export interface QueueItem {
   doctor: string;
   time: string;
   waitTime: string;
-  token: string;
+  token?: string;
   prescription?: string;
   medicines?: PrescriptionItem[];
+  tenantId?: string;
+  date?: string;
 }
 
-const QUEUE_KEY = 'quickcare_queue';
-
-export const getQueue = (): QueueItem[] => {
-  const stored = localStorage.getItem(QUEUE_KEY);
-  if (stored) {
-    return JSON.parse(stored);
-  }
-  // Initialize with mock data
-  const initial = MOCK_QUEUE.map((q, i) => ({
-    ...q,
-    token: `A-${41 + i}`,
-    prescription: '',
-    medicines: []
-  }));
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(initial));
-  return initial;
+export const getQueue = async (tenantId?: string): Promise<QueueItem[]> => {
+  const url = tenantId ? `/queue?tenantId=${tenantId}` : '/queue';
+  return api.get(url);
 };
 
-export const updateQueueItem = (id: string, updates: Partial<QueueItem>) => {
-  const queue = getQueue();
-  const updated = queue.map(q => q.id === id ? { ...q, ...updates } : q);
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(updated));
+export const updateQueueItem = async (id: string, updates: Partial<QueueItem>) => {
+  await api.patch(`/queue/${id}`, updates);
   window.dispatchEvent(new Event('queue_updated'));
 };
 
-export const addQueueItem = (item: QueueItem) => {
-  const queue = getQueue();
-  queue.push(item);
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+export const addQueueItem = async (item: QueueItem) => {
+  await api.post('/queue', item);
   window.dispatchEvent(new Event('queue_updated'));
 };
 
-export const useQueue = () => {
-  const [queue, setQueue] = useState<QueueItem[]>(getQueue());
+export const useQueue = (tenantId?: string) => {
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchQueue = async () => {
+    try {
+      const data = await getQueue(tenantId);
+      setQueue(data);
+    } catch (error) {
+      console.error('Failed to fetch queue:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const handleStorage = () => {
-      setQueue(getQueue());
-    };
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('queue_updated', handleStorage);
+    fetchQueue();
+    
+    // Listen for socket updates
+    socket.on('queue-update', fetchQueue);
+    socket.on('global-queue-update', fetchQueue);
+
+    window.addEventListener('queue_updated', fetchQueue);
     return () => {
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('queue_updated', handleStorage);
+      socket.off('queue-update', fetchQueue);
+      socket.off('global-queue-update', fetchQueue);
+      window.removeEventListener('queue_updated', fetchQueue);
     };
   }, []);
 

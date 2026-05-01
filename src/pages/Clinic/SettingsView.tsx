@@ -1,9 +1,43 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { api } from "@/lib/api";
 
 export default function SettingsView() {
+  const [profile, setProfile] = useState({ name: '', address: '' });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchClinic = async () => {
+      try {
+        const data = await api.get('/admin/clinic');
+        setProfile({ name: data.name || '', address: data.address || '' });
+      } catch (error) {
+        console.error('Failed to fetch clinic settings:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchClinic();
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.patch('/admin/clinic', profile);
+      alert('Settings updated successfully!');
+    } catch (error) {
+      console.error('Failed to update clinic settings:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <div className="p-4 text-center">Loading settings...</div>;
+
   return (
     <div className="animate-in fade-in duration-300 max-w-3xl">
       <div className="mb-8">
@@ -18,41 +52,27 @@ export default function SettingsView() {
             <CardDescription>Update your clinic's public information.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="clinicName">Clinic Name</Label>
-                <Input id="clinicName" defaultValue="City Health Clinic" />
+                <Input 
+                  id="clinicName" 
+                  value={profile.name} 
+                  onChange={(e) => setProfile({ ...profile, name: e.target.value })} 
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone">Contact Phone</Label>
-                <Input id="phone" defaultValue="+1 555-0100" />
-              </div>
-              <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="address">Address</Label>
-                <Input id="address" defaultValue="123 Medical Center Blvd, Suite 100" />
+                <Input 
+                  id="address" 
+                  value={profile.address} 
+                  onChange={(e) => setProfile({ ...profile, address: e.target.value })} 
+                />
               </div>
             </div>
-            <Button className="mt-4">Save Changes</Button>
-          </CardContent>
-        </Card>
-
-        <Card className="border-none shadow-sm">
-          <CardHeader>
-            <CardTitle>Working Hours</CardTitle>
-            <CardDescription>Set your standard operating hours.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 max-w-md">
-              <div className="space-y-2">
-                <Label>Opening Time</Label>
-                <Input type="time" defaultValue="09:00" />
-              </div>
-              <div className="space-y-2">
-                <Label>Closing Time</Label>
-                <Input type="time" defaultValue="18:00" />
-              </div>
-            </div>
-            <Button className="mt-4">Update Hours</Button>
+            <Button className="mt-4" onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
           </CardContent>
         </Card>
       </div>

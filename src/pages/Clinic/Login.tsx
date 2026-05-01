@@ -3,21 +3,46 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Stethoscope } from "lucide-react";
+import { Stethoscope, ShieldCheck, ArrowRight } from "lucide-react";
+import { api } from "@/lib/api";
 
 export default function ClinicLogin() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState<"phone" | "otp">("phone");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
+    try {
+      await api.post("/auth/otp/send", { phone });
+      setStep("otp");
+    } catch (error) {
+      console.error("Failed to send OTP:", error);
+    } finally {
       setLoading(false);
-      navigate("/admin/dashboard");
-    }, 1000);
+    }
+  };
+
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await api.post("/auth/otp/verify", { phone, code: otp });
+      localStorage.setItem("token", res.token);
+      
+      if (res.user?.role === 'root') {
+        navigate("/platform-admin");
+      } else {
+        navigate("/admin/dashboard");
+      }
+    } catch (error) {
+      console.error("Invalid OTP:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -33,36 +58,53 @@ export default function ClinicLogin() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="email">
-                Email
-              </label>
+          {step === "phone" ? (
+            <form onSubmit={handleSendOTP} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Phone Number</label>
+                <Input 
+                  type="tel" 
+                  placeholder="Enter your registered mobile" 
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  required 
+                  className="h-12 rounded-xl"
+                />
+              </div>
+              <Button className="w-full h-12 rounded-xl font-bold" type="submit" disabled={loading}>
+                {loading ? "Sending..." : "Get Login OTP"}
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyOTP} className="space-y-6">
+              <div className="text-center mb-4">
+                <div className="w-12 h-12 bg-primary/5 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <ShieldCheck className="w-6 h-6 text-primary" />
+                </div>
+                <p className="text-sm text-muted-foreground">Sent to {phone}</p>
+              </div>
               <Input 
-                id="email" 
-                type="email" 
-                placeholder="admin@clinic.com" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required 
+                autoFocus
+                type="number"
+                placeholder="0000"
+                value={otp}
+                onChange={e => setOtp(e.target.value.slice(0, 4))}
+                className="h-16 text-center text-3xl tracking-[0.5em] rounded-2xl font-mono"
+                required
               />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="password">
-                Password
-              </label>
-              <Input 
-                id="password" 
-                type="password" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required 
-              />
-            </div>
-            <Button className="w-full mt-6" type="submit" disabled={loading}>
-              {loading ? "Signing in..." : "Sign In"}
-            </Button>
-          </form>
+              <Button className="w-full h-12 rounded-xl font-bold" type="submit" disabled={loading || otp.length < 4}>
+                {loading ? "Verifying..." : "Verify & Sign In"}
+              </Button>
+              <button 
+                type="button" 
+                onClick={() => setStep("phone")}
+                className="w-full text-sm text-muted-foreground hover:text-primary transition-colors"
+              >
+                Change Phone Number
+              </button>
+            </form>
+          )}
         </CardContent>
       </Card>
     </div>

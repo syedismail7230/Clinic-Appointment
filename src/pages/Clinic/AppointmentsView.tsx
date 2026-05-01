@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Filter, FileText, Clock, User, Tag, History, CalendarDays } from "lucide-react";
 import { format } from "date-fns";
 import { Card } from "@/components/ui/card";
@@ -7,14 +7,30 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { Calendar } from "@/components/ui/calendar";
-import { MOCK_APPOINTMENTS } from "@/lib/mockData";
+import { api } from "@/lib/api";
 
 export default function AppointmentsView() {
-  const [appointments, setAppointments] = useState(MOCK_APPOINTMENTS);
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [selectedDoctor, setSelectedDoctor] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
+
+  const fetchAppointments = async () => {
+    try {
+      const data = await api.get('/appointments');
+      setAppointments(data);
+    } catch (error) {
+      console.error('Failed to fetch appointments:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAppointments();
+  }, []);
 
   const doctors = ["All", ...Array.from(new Set(appointments.map(a => a.doctor)))];
   
@@ -27,8 +43,13 @@ export default function AppointmentsView() {
     return matchDate && matchDoctor && matchSearch;
   }).sort((a, b) => a.time.localeCompare(b.time));
 
-  const updateStatus = (id: string, newStatus: string) => {
-    setAppointments(appointments.map(a => a.id === id ? { ...a, status: newStatus } : a));
+  const updateStatus = async (id: string, newStatus: string) => {
+    try {
+      await api.patch(`/appointments/${id}`, { status: newStatus });
+      fetchAppointments();
+    } catch (error) {
+      console.error('Failed to update status:', error);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -257,7 +278,7 @@ export default function AppointmentsView() {
                 <History className="w-4 h-4 mr-2 text-black" /> Patient History
               </h4>
               <div className="space-y-3">
-                {selectedPatient.history.length > 0 ? selectedPatient.history.map((record: any, idx: number) => (
+                {selectedPatient?.history?.length > 0 ? selectedPatient.history.map((record: any, idx: number) => (
                   <div key={idx} className="border-l-2 border-black pl-4 py-1">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium text-gray-900">{record.date}</span>

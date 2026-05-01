@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, User, Phone, ShieldCheck, CalendarDays } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MOCK_CLINICS } from "@/lib/mockData";
 import { addQueueItem, getQueue } from "@/lib/store";
+import { api } from "@/lib/api";
 
 export default function BookingFlow() {
   const { id } = useParams();
@@ -13,18 +13,35 @@ export default function BookingFlow() {
   const location = useLocation();
   const state = location.state as { doctorId: string, slot: string, date?: string } | null;
   
+  const [clinic, setClinic] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<"details" | "otp">("details");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const clinic = MOCK_CLINICS.find(c => c.id === id);
-  const doctor = clinic?.doctors.find(d => d.id === state?.doctorId);
+  useEffect(() => {
+    const fetchClinic = async () => {
+      try {
+        const data = await api.get(`/clinics/${id}`);
+        setClinic(data);
+      } catch (error) {
+        console.error('Failed to fetch clinic:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchClinic();
+  }, [id]);
 
-  if (!clinic || !state || !doctor) {
+  if (loading) return <div className="p-6 text-center">Loading...</div>;
+  if (!clinic || !state) {
     return <div className="p-6 text-center">Invalid booking session</div>;
   }
+
+  const doctor = clinic.doctors?.find((d: any) => d.id === state.doctorId);
+  if (!doctor) return <div className="p-6 text-center">Doctor not found</div>;
 
   const handleSendOtp = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,35 +54,38 @@ export default function BookingFlow() {
     }
   };
 
-  const handleVerifyAndBook = (e: React.FormEvent) => {
+  const handleVerifyAndBook = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otp.length === 4) {
       setIsSubmitting(true);
       
-      // Add to queue
-      const queueId = `q${Date.now()}`;
-      const currentQueue = getQueue();
-      const tokenNumber = currentQueue.length + 42; // Just a mock token generator
-      
-      addQueueItem({
-        id: queueId,
-        patientName: name,
-        phone: phone,
-        status: "waiting",
-        doctor: doctor.name,
-        time: state.slot,
-        waitTime: "15 mins",
-        token: `A-${tokenNumber}`,
-        prescription: ""
-      });
-
-      setTimeout(() => {
-        setIsSubmitting(false);
-        navigate(`/clinic/${id}/confirmation`, { 
-          state: { ...state, name, phone, queueId },
-          replace: true
+      try {
+        // Add to queue
+        const queueId = `q${Date.now()}`;
+        
+        await addQueueItem({
+          id: queueId,
+          patientName: name,
+          phone: phone,
+          status: "waiting",
+          doctor: doctor.name,
+          time: state.slot,
+          waitTime: "15 mins",
+          prescription: "",
+          tenantId: clinic.tenant_id
         });
-      }, 1000);
+
+        setTimeout(() => {
+          setIsSubmitting(false);
+          navigate(`/clinic/${id}/confirmation`, { 
+            state: { ...state, name, phone, queueId },
+            replace: true
+          });
+        }, 1000);
+      } catch (error) {
+        console.error('Booking failed:', error);
+        setIsSubmitting(false);
+      }
     }
   };
 

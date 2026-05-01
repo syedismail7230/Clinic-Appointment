@@ -1,9 +1,28 @@
+import { useState, useEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { MOCK_CLINICS } from "@/lib/mockData";
+import { api } from "@/lib/api";
 
 export default function DemoQR() {
+  const [clinics, setClinics] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchClinics = async () => {
+      try {
+        const data = await api.get('/clinics');
+        setClinics(data);
+      } catch (error) {
+        console.error('Failed to fetch clinics:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchClinics();
+  }, []);
+
+  if (loading) return <div className="p-16 text-center text-gray-500">Loading Demo QR Codes...</div>;
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-2xl mx-auto">
@@ -21,7 +40,7 @@ export default function DemoQR() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          {MOCK_CLINICS.map((clinic) => {
+          {clinics.map((clinic) => {
             // The scanner logic handles both full URLs containing '/clinic/' and raw clinic IDs.
             // Let's use the raw clinic ID for simplicity, or the full URL.
             const qrValue = `${window.location.origin}/clinic/${clinic.id}`;
