@@ -557,9 +557,23 @@ router.post('/admin/impersonate', authenticateToken, async (req: any, res) => {
 router.post('/admin/tenants/:id/qr', authenticateToken, async (req: any, res) => {
     if (req.user.role !== 'root') return res.status(403).json({ error: 'Root access required' });
     
-    // Provide a simple QR code URL pointing to the tenant ID
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${req.params.id}`;
-    res.json({ qrUrl });
+    const tenantId = req.params.id;
+    
+    // Fetch the first clinic for this tenant to use as the destination
+    const { data: clinic } = await supabase.from('clinics').select('id').eq('tenant_id', tenantId).limit(1).single();
+    
+    // Use the provided frontend URL or fall back to a reasonable default
+    // The user mentioned: https://quickcare.zawrindustries.com
+    const frontendUrl = process.env.FRONTEND_URL || 'https://quickcare.zawrindustries.com';
+    
+    // We can link either to the specific clinic or use the ?clinic= tenant parameter
+    // Linking to the specific clinic ID is more direct
+    const bookingUrl = clinic 
+        ? `${frontendUrl}/clinic/${clinic.id}` 
+        : `${frontendUrl}/?clinic=${tenantId}`;
+
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(bookingUrl)}`;
+    res.json({ qrUrl, bookingUrl });
 });
 
 export default router;
