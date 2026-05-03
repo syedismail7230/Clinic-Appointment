@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, Clock, CheckCircle2, Activity, Search, UserPlus, MoreVertical, Plus, Trash2 } from "lucide-react";
+import { Users, Clock, CheckCircle2, Activity, Search, UserPlus, MoreVertical, Plus, Trash2, ArrowUpDown, FileText, Pill } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,11 +8,20 @@ import { Modal } from "@/components/ui/modal";
 import { useQueue, updateQueueItem, addQueueItem, PrescriptionItem } from "@/lib/store";
 import { api } from "@/lib/api";
 
+type SortField = 'time' | 'token';
+type SortDirection = 'asc' | 'desc';
+
 export default function QueueView() {
   const queue = useQueue();
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [viewingPatient, setViewingPatient] = useState<any>(null);
   const [prescription, setPrescription] = useState("");
   const [medicines, setMedicines] = useState<PrescriptionItem[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [doctorFilter, setDoctorFilter] = useState("all");
+  const [sortField, setSortField] = useState<SortField>('token');
+  const [sortDir, setSortDir] = useState<SortDirection>('asc');
   
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
   const [walkInForm, setWalkInForm] = useState({ name: '', phone: '', doctor: '' });
@@ -21,16 +30,66 @@ export default function QueueView() {
   useEffect(() => {
     const fetchDoctors = async () => {
       try {
-        const clinics = await api.get('/clinics');
-        if (clinics.length > 0) {
-          setClinicDoctors(clinics[0].doctors || []);
-        }
+        const doctors = await api.get('/admin/doctors');
+        setClinicDoctors(doctors);
       } catch (error) {
-        console.error('Failed to fetch doctors:', error);
+        try {
+          const clinics = await api.get('/clinics');
+          if (clinics.length > 0) {
+            setClinicDoctors(clinics[0].doctors || []);
+          }
+        } catch (err) {
+          console.error('Failed to fetch doctors:', err);
+        }
       }
     };
     fetchDoctors();
   }, []);
+
+  // Get unique doctors from queue for filter
+  const queueDoctors = Array.from(new Set(queue.map(q => q.doctor))).filter(Boolean);
+
+  // Filter queue
+  const filteredQueue = queue.filter(item => {
+    // Search
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      const matchesSearch = (
+        item.patientName.toLowerCase().includes(term) ||
+        item.phone.includes(term) ||
+        item.doctor.toLowerCase().includes(term) ||
+        (item.token && item.token.toLowerCase().includes(term))
+      );
+      if (!matchesSearch) return false;
+    }
+    // Status filter
+    if (statusFilter !== 'all' && item.status !== statusFilter) return false;
+    // Doctor filter
+    if (doctorFilter !== 'all' && item.doctor !== doctorFilter) return false;
+    return true;
+  });
+
+  // Sort
+  const sortedQueue = [...filteredQueue].sort((a, b) => {
+    if (sortField === 'token') {
+      const tokenA = a.token || '';
+      const tokenB = b.token || '';
+      return sortDir === 'asc' ? tokenA.localeCompare(tokenB) : tokenB.localeCompare(tokenA);
+    } else {
+      const timeA = a.time || '';
+      const timeB = b.time || '';
+      return sortDir === 'asc' ? timeA.localeCompare(timeB) : timeB.localeCompare(timeA);
+    }
+  });
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir('asc');
+    }
+  };
 
   const handleUpdateStatus = async (id: string, newStatus: string) => {
     if (newStatus === 'completed') {
@@ -72,12 +131,18 @@ export default function QueueView() {
       doctor: walkInForm.doctor,
       time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
       waitTime: '10 mins',
-      token: `W-${Math.floor(Math.random() * 100)}`,
       prescription: '',
       medicines: []
     });
     setIsWalkInModalOpen(false);
     setWalkInForm({ name: '', phone: '', doctor: '' });
+  };
+
+  const calculateAvgWait = () => {
+    const waitingPatients = queue.filter(q => q.status === 'waiting' || q.status === 'in-consultation');
+    if (waitingPatients.length === 0) return '0m';
+    const avgMinutes = Math.round(waitingPatients.length * 8);
+    return `${avgMinutes}m`;
   };
 
   const getStatusBadge = (status: string) => {
@@ -101,7 +166,12 @@ export default function QueueView() {
         <div className="flex gap-3 w-full md:w-auto">
           <div className="relative flex-1 md:w-64">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-            <Input className="pl-9 bg-white" placeholder="Search patient..." />
+            <Input 
+              className="pl-9 bg-white" 
+              placeholder="Search patient..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
           <Button className="shrink-0" onClick={() => setIsWalkInModalOpen(true)}>
             <UserPlus className="w-4 h-4 mr-2" />
@@ -145,9 +215,48 @@ export default function QueueView() {
               <h3 className="text-sm font-medium text-gray-500">Avg Wait</h3>
               <Activity className="w-4 h-4 text-purple-500" />
             </div>
-            <p className="text-3xl font-bold">18m</p>
+            <p className="text-3xl font-bold">{calculateAvgWait()}</p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Filters Row */}
+      <div className="flex flex-wrap gap-3 mb-4">
+        <select
+          className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+        >
+          <option value="all">All Statuses</option>
+          <option value="booked">Booked</option>
+          <option value="waiting">Waiting</option>
+          <option value="in-consultation">In Consultation</option>
+          <option value="completed">Completed</option>
+        </select>
+        <select
+          className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+          value={doctorFilter}
+          onChange={e => setDoctorFilter(e.target.value)}
+        >
+          <option value="all">All Doctors</option>
+          {queueDoctors.map(doc => (
+            <option key={doc} value={doc}>{doc}</option>
+          ))}
+        </select>
+        <div className="ml-auto flex gap-2">
+          <button
+            onClick={() => toggleSort('token')}
+            className={`h-9 px-3 rounded-lg border text-sm flex items-center gap-1.5 transition-colors ${sortField === 'token' ? 'bg-black text-white border-black' : 'bg-white border-gray-200 hover:bg-gray-50'}`}
+          >
+            <ArrowUpDown className="w-3.5 h-3.5" /> Token {sortField === 'token' && (sortDir === 'asc' ? '↑' : '↓')}
+          </button>
+          <button
+            onClick={() => toggleSort('time')}
+            className={`h-9 px-3 rounded-lg border text-sm flex items-center gap-1.5 transition-colors ${sortField === 'time' ? 'bg-black text-white border-black' : 'bg-white border-gray-200 hover:bg-gray-50'}`}
+          >
+            <ArrowUpDown className="w-3.5 h-3.5" /> Time {sortField === 'time' && (sortDir === 'asc' ? '↑' : '↓')}
+          </button>
+        </div>
       </div>
 
       {/* Queue List */}
@@ -165,7 +274,15 @@ export default function QueueView() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {queue.map((item) => (
+              {sortedQueue.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                    {searchTerm || statusFilter !== 'all' || doctorFilter !== 'all' 
+                      ? 'No patients match your filters.' 
+                      : 'No patients in queue today.'}
+                  </td>
+                </tr>
+              ) : sortedQueue.map((item) => (
                 <tr key={item.id} className="bg-white hover:bg-gray-50/50 transition-colors">
                   <td className="px-6 py-4 font-bold text-gray-900">{item.token}</td>
                   <td className="px-6 py-4">
@@ -191,7 +308,7 @@ export default function QueueView() {
                       {item.status === 'in-consultation' && (
                         <Button size="sm" variant="secondary" onClick={() => handleUpdateStatus(item.id, 'completed')}>Complete</Button>
                       )}
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-gray-400 hover:text-gray-600">
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-gray-400 hover:text-gray-600" onClick={() => setViewingPatient(item)}>
                         <MoreVertical className="w-4 h-4" />
                       </Button>
                     </div>
@@ -203,6 +320,86 @@ export default function QueueView() {
         </div>
       </Card>
 
+      {/* Patient Detail Modal (Action button) */}
+      <Modal 
+        isOpen={!!viewingPatient} 
+        onClose={() => setViewingPatient(null)} 
+        title="Patient Details"
+      >
+        {viewingPatient && (
+          <div className="space-y-6 max-w-lg w-full">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">{viewingPatient.patientName}</h3>
+                <p className="text-gray-500">{viewingPatient.phone}</p>
+              </div>
+              {getStatusBadge(viewingPatient.status)}
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-gray-50 p-3 rounded-xl border text-center">
+                <p className="text-xs text-gray-500 font-medium mb-1">Token</p>
+                <p className="font-bold text-lg">{viewingPatient.token}</p>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-xl border text-center">
+                <p className="text-xs text-gray-500 font-medium mb-1">Time</p>
+                <p className="font-bold text-lg">{viewingPatient.time}</p>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-xl border text-center">
+                <p className="text-xs text-gray-500 font-medium mb-1">Doctor</p>
+                <p className="font-bold text-sm">{viewingPatient.doctor}</p>
+              </div>
+            </div>
+
+            {viewingPatient.prescription && (
+              <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+                <h4 className="flex items-center gap-2 font-semibold text-blue-900 mb-2">
+                  <FileText className="w-4 h-4" /> Prescription Notes
+                </h4>
+                <p className="text-blue-800 text-sm whitespace-pre-wrap">{viewingPatient.prescription}</p>
+              </div>
+            )}
+
+            {viewingPatient.medicines && viewingPatient.medicines.length > 0 && (
+              <div>
+                <h4 className="flex items-center gap-2 font-semibold text-gray-900 mb-2">
+                  <Pill className="w-4 h-4" /> Medicines
+                </h4>
+                <div className="border rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                      <tr>
+                        <th className="px-3 py-2 text-left">#</th>
+                        <th className="px-3 py-2 text-left">Medicine</th>
+                        <th className="px-3 py-2 text-left">Dosage</th>
+                        <th className="px-3 py-2 text-left">Frequency</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {viewingPatient.medicines.map((med: any, i: number) => (
+                        <tr key={med.id || i}>
+                          <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                          <td className="px-3 py-2 font-medium">{med.medicineName}</td>
+                          <td className="px-3 py-2">{med.dosage}</td>
+                          <td className="px-3 py-2">{med.frequency}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {!viewingPatient.prescription && (!viewingPatient.medicines || viewingPatient.medicines.length === 0) && viewingPatient.status !== 'completed' && (
+              <div className="text-center py-6 text-gray-400 text-sm">
+                No prescription added yet. Complete the consultation to add medicines and notes.
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Prescription Modal (Complete consultation) */}
       <Modal 
         isOpen={!!selectedPatientId} 
         onClose={() => setSelectedPatientId(null)} 
@@ -237,27 +434,13 @@ export default function QueueView() {
                       <tr key={med.id} className="bg-white">
                         <td className="px-3 py-2 text-center text-gray-500">{index + 1}</td>
                         <td className="px-3 py-2">
-                          <Input 
-                            className="h-8 text-sm" 
-                            placeholder="e.g. Paracetamol" 
-                            value={med.medicineName} 
-                            onChange={(e) => updateMedicine(med.id, 'medicineName', e.target.value)} 
-                          />
+                          <Input className="h-8 text-sm" placeholder="e.g. Paracetamol" value={med.medicineName} onChange={(e) => updateMedicine(med.id, 'medicineName', e.target.value)} />
                         </td>
                         <td className="px-3 py-2">
-                          <Input 
-                            className="h-8 text-sm" 
-                            placeholder="e.g. 500mg" 
-                            value={med.dosage} 
-                            onChange={(e) => updateMedicine(med.id, 'dosage', e.target.value)} 
-                          />
+                          <Input className="h-8 text-sm" placeholder="e.g. 500mg" value={med.dosage} onChange={(e) => updateMedicine(med.id, 'dosage', e.target.value)} />
                         </td>
                         <td className="px-3 py-2">
-                          <select
-                            className="h-8 text-sm w-full rounded-md border border-gray-200 bg-white px-2 py-1 focus:outline-none focus:ring-2 focus:ring-black"
-                            value={med.time}
-                            onChange={(e) => updateMedicine(med.id, 'time', e.target.value)}
-                          >
+                          <select className="h-8 text-sm w-full rounded-md border border-gray-200 bg-white px-2 py-1 focus:outline-none focus:ring-2 focus:ring-black" value={med.time} onChange={(e) => updateMedicine(med.id, 'time', e.target.value)}>
                             <option value="">Select...</option>
                             <option value="Before Food">Before Food</option>
                             <option value="After Food">After Food</option>
@@ -266,11 +449,7 @@ export default function QueueView() {
                           </select>
                         </td>
                         <td className="px-3 py-2">
-                          <select
-                            className="h-8 text-sm w-full rounded-md border border-gray-200 bg-white px-2 py-1 focus:outline-none focus:ring-2 focus:ring-black"
-                            value={med.frequency}
-                            onChange={(e) => updateMedicine(med.id, 'frequency', e.target.value)}
-                          >
+                          <select className="h-8 text-sm w-full rounded-md border border-gray-200 bg-white px-2 py-1 focus:outline-none focus:ring-2 focus:ring-black" value={med.frequency} onChange={(e) => updateMedicine(med.id, 'frequency', e.target.value)}>
                             <option value="">Select...</option>
                             <option value="1-0-0 (Morning)">1-0-0 (Morning)</option>
                             <option value="0-1-0 (Afternoon)">0-1-0 (Afternoon)</option>
@@ -278,24 +457,17 @@ export default function QueueView() {
                             <option value="1-0-1 (Morning & Night)">1-0-1 (Morning & Night)</option>
                             <option value="1-1-1 (3 times a day)">1-1-1 (3 times a day)</option>
                             <option value="SOS (As needed)">SOS (As needed)</option>
-                            <option value="Once a week">Once a week</option>
                           </select>
                         </td>
                         <td className="px-3 py-2">
-                          <select
-                            className="h-8 text-sm w-full rounded-md border border-gray-200 bg-white px-2 py-1 focus:outline-none focus:ring-2 focus:ring-black"
-                            value={med.duration}
-                            onChange={(e) => updateMedicine(med.id, 'duration', e.target.value)}
-                          >
+                          <select className="h-8 text-sm w-full rounded-md border border-gray-200 bg-white px-2 py-1 focus:outline-none focus:ring-2 focus:ring-black" value={med.duration} onChange={(e) => updateMedicine(med.id, 'duration', e.target.value)}>
                             <option value="">Select...</option>
                             <option value="1 Day">1 Day</option>
-                            <option value="2 Days">2 Days</option>
                             <option value="3 Days">3 Days</option>
                             <option value="5 Days">5 Days</option>
                             <option value="1 Week">1 Week</option>
                             <option value="2 Weeks">2 Weeks</option>
                             <option value="1 Month">1 Month</option>
-                            <option value="Until finished">Until finished</option>
                           </select>
                         </td>
                         <td className="px-3 py-2 text-center">
@@ -331,6 +503,8 @@ export default function QueueView() {
           </div>
         </div>
       </Modal>
+
+      {/* Walk-in Modal */}
       <Modal 
         isOpen={isWalkInModalOpen} 
         onClose={() => setIsWalkInModalOpen(false)} 
@@ -339,19 +513,11 @@ export default function QueueView() {
         <div className="space-y-4 max-w-md w-full">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Patient Name</label>
-            <Input 
-              placeholder="e.g. John Doe" 
-              value={walkInForm.name}
-              onChange={(e) => setWalkInForm({...walkInForm, name: e.target.value})}
-            />
+            <Input placeholder="e.g. John Doe" value={walkInForm.name} onChange={(e) => setWalkInForm({...walkInForm, name: e.target.value})} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-            <Input 
-              placeholder="e.g. 555-0123" 
-              value={walkInForm.phone}
-              onChange={(e) => setWalkInForm({...walkInForm, phone: e.target.value})}
-            />
+            <Input placeholder="e.g. 9876543210" value={walkInForm.phone} onChange={(e) => setWalkInForm({...walkInForm, phone: e.target.value})} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Doctor</label>

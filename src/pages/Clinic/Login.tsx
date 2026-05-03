@@ -12,15 +12,18 @@ export default function ClinicLogin() {
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
     try {
       await api.post("/auth/otp/send", { phone });
       setStep("otp");
-    } catch (error) {
-      console.error("Failed to send OTP:", error);
+    } catch (err: any) {
+      setError("Failed to send OTP. Please try again.");
+      console.error("Failed to send OTP:", err);
     } finally {
       setLoading(false);
     }
@@ -29,17 +32,26 @@ export default function ClinicLogin() {
   const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
     try {
       const res = await api.post("/auth/otp/verify", { phone, code: otp });
-      localStorage.setItem("token", res.token);
       
+      // Check if the user has admin/root access before storing token
       if (res.user?.role === 'root') {
+        localStorage.setItem("token", res.token);
         navigate("/platform-admin");
-      } else {
+      } else if (res.user?.role === 'admin') {
+        localStorage.setItem("token", res.token);
         navigate("/admin/dashboard");
+      } else {
+        // Not an admin — show error, don't store token
+        setError("This phone number is not registered as a clinic admin. Please use your registered clinic phone number.");
+        setOtp("");
       }
-    } catch (error) {
-      console.error("Invalid OTP:", error);
+    } catch (err: any) {
+      setError("Invalid OTP. Please check the code and try again.");
+      setOtp("");
+      console.error("Invalid OTP:", err);
     } finally {
       setLoading(false);
     }
@@ -58,6 +70,11 @@ export default function ClinicLogin() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-medium">
+              {error}
+            </div>
+          )}
           {step === "phone" ? (
             <form onSubmit={handleSendOTP} className="space-y-4">
               <div className="space-y-2">

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Filter, FileText, Clock, User, Tag, History, CalendarDays } from "lucide-react";
+import { Search, Filter, FileText, Clock, User, Tag, History, CalendarDays, Plus, X } from "lucide-react";
 import { format } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,10 @@ export default function AppointmentsView() {
   const [selectedDoctor, setSelectedDoctor] = useState("All");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [editNotes, setEditNotes] = useState("");
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
 
   const fetchAppointments = async () => {
     try {
@@ -41,7 +45,7 @@ export default function AppointmentsView() {
     const matchDoctor = selectedDoctor === "All" || a.doctor === selectedDoctor;
     const matchSearch = a.patientName.toLowerCase().includes(searchTerm.toLowerCase()) || a.phone.includes(searchTerm);
     return matchDate && matchDoctor && matchSearch;
-  }).sort((a, b) => a.time.localeCompare(b.time));
+  }).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 
   const updateStatus = async (id: string, newStatus: string) => {
     try {
@@ -50,6 +54,42 @@ export default function AppointmentsView() {
     } catch (error) {
       console.error('Failed to update status:', error);
     }
+  };
+
+  const handleSaveNotes = async () => {
+    if (!selectedPatient) return;
+    setSavingNotes(true);
+    try {
+      await api.patch(`/appointments/${selectedPatient.id}`, { 
+        notes: editNotes,
+        tags: editTags
+      });
+      fetchAppointments();
+      // Update local state
+      setSelectedPatient({ ...selectedPatient, notes: editNotes, tags: editTags });
+    } catch (error) {
+      console.error('Failed to save notes:', error);
+    } finally {
+      setSavingNotes(false);
+    }
+  };
+
+  const handleAddTag = () => {
+    const trimmed = newTag.trim();
+    if (trimmed && !editTags.includes(trimmed)) {
+      setEditTags([...editTags, trimmed]);
+    }
+    setNewTag("");
+  };
+
+  const handleRemoveTag = (tag: string) => {
+    setEditTags(editTags.filter(t => t !== tag));
+  };
+
+  const openPatientDetail = (apt: any) => {
+    setSelectedPatient(apt);
+    setEditNotes(apt.notes || '');
+    setEditTags(apt.tags || []);
   };
 
   const getStatusBadge = (status: string) => {
@@ -64,6 +104,9 @@ export default function AppointmentsView() {
       default: return <Badge variant="outline">{status}</Badge>;
     }
   };
+
+  // Count appointments on dates for calendar dots
+  const appointmentDates = new Set(appointments.map(a => a.date));
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 h-full flex flex-col">
@@ -135,6 +178,12 @@ export default function AppointmentsView() {
               </div>
             </div>
           </div>
+
+          {filteredAppointments.length === 0 && appointments.length > 0 && (
+            <div className="mt-4 p-3 bg-blue-50 rounded-xl border border-blue-100 text-sm text-blue-700">
+              No appointments on this date. Try selecting a different date from the calendar.
+            </div>
+          )}
         </Card>
 
         {/* Right Content: Appointments List */}
@@ -166,7 +215,7 @@ export default function AppointmentsView() {
                       <div className="flex flex-col items-center justify-center">
                         <CalendarDays className="w-12 h-12 text-gray-300 mb-3" />
                         <p className="text-base font-medium text-gray-900">No appointments</p>
-                        <p className="text-sm">There are no bookings for this date.</p>
+                        <p className="text-sm">Appointments will appear here after patients are consulted from the queue.</p>
                       </div>
                     </td>
                   </tr>
@@ -178,9 +227,9 @@ export default function AppointmentsView() {
                     <td className="px-6 py-4">
                       <div className="font-medium text-gray-900">{apt.patientName}</div>
                       <div className="text-gray-500 text-xs">{apt.phone}</div>
-                      {apt.tags.length > 0 && (
+                      {apt.tags && apt.tags.length > 0 && (
                         <div className="flex gap-1 mt-1">
-                          {apt.tags.map(tag => (
+                          {apt.tags.map((tag: string) => (
                             <span key={tag} className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
                               {tag}
                             </span>
@@ -206,7 +255,7 @@ export default function AppointmentsView() {
                       <div className="mt-1.5">{getStatusBadge(apt.status)}</div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Button size="sm" variant="outline" className="rounded-lg" onClick={() => setSelectedPatient(apt)}>
+                      <Button size="sm" variant="outline" className="rounded-lg" onClick={() => openPatientDetail(apt)}>
                         <FileText className="w-4 h-4 mr-2" />
                         Details
                       </Button>
@@ -250,26 +299,43 @@ export default function AppointmentsView() {
                 <Tag className="w-4 h-4 mr-2 text-black" /> Tags
               </h4>
               <div className="flex gap-2 flex-wrap">
-                {selectedPatient.tags.length > 0 ? selectedPatient.tags.map((tag: string) => (
-                  <Badge key={tag} variant="secondary" className="rounded-md">{tag}</Badge>
-                )) : <span className="text-sm text-gray-500">No tags added.</span>}
-                <Button variant="outline" size="sm" className="h-6 text-xs border-dashed rounded-md">
-                  + Add Tag
-                </Button>
+                {editTags.map((tag: string) => (
+                  <Badge key={tag} variant="secondary" className="rounded-md pr-1">
+                    {tag}
+                    <button onClick={() => handleRemoveTag(tag)} className="ml-1.5 hover:text-red-600">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))}
+                <div className="flex items-center gap-1">
+                  <Input 
+                    className="h-6 w-24 text-xs" 
+                    placeholder="New tag..."
+                    value={newTag}
+                    onChange={e => setNewTag(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleAddTag()}
+                  />
+                  <Button variant="outline" size="sm" className="h-6 text-xs border-dashed rounded-md" onClick={handleAddTag}>
+                    <Plus className="w-3 h-3" />
+                  </Button>
+                </div>
               </div>
             </div>
 
             <div>
               <h4 className="flex items-center font-semibold text-gray-900 mb-2">
-                <FileText className="w-4 h-4 mr-2 text-black" /> Current Notes
+                <FileText className="w-4 h-4 mr-2 text-black" /> Consultation Notes
               </h4>
               <textarea 
                 className="w-full min-h-[100px] p-3 text-sm border rounded-xl focus:ring-2 focus:ring-black outline-none bg-gray-50"
-                defaultValue={selectedPatient.notes}
+                value={editNotes}
+                onChange={e => setEditNotes(e.target.value)}
                 placeholder="Add consultation notes here..."
               />
               <div className="flex justify-end mt-2">
-                <Button size="sm" className="rounded-lg">Save Notes</Button>
+                <Button size="sm" className="rounded-lg" onClick={handleSaveNotes} disabled={savingNotes}>
+                  {savingNotes ? 'Saving...' : 'Save Notes & Tags'}
+                </Button>
               </div>
             </div>
 
@@ -278,15 +344,24 @@ export default function AppointmentsView() {
                 <History className="w-4 h-4 mr-2 text-black" /> Patient History
               </h4>
               <div className="space-y-3">
-                {selectedPatient?.history?.length > 0 ? selectedPatient.history.map((record: any, idx: number) => (
-                  <div key={idx} className="border-l-2 border-black pl-4 py-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-gray-900">{record.date}</span>
-                      <span className="text-xs text-gray-500">{record.doctor}</span>
+                {appointments.filter(a => a.phone === selectedPatient.phone && a.id !== selectedPatient.id).length > 0 ? (
+                  appointments.filter(a => a.phone === selectedPatient.phone && a.id !== selectedPatient.id).map((record: any) => (
+                    <div key={record.id} className="border-l-2 border-black pl-4 py-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium text-gray-900">{record.date}</span>
+                        <span className="text-xs text-gray-500">{record.doctor}</span>
+                      </div>
+                      <p className="text-sm text-gray-600">{record.notes || 'No notes'}</p>
+                      {record.tags && record.tags.length > 0 && (
+                        <div className="flex gap-1 mt-1">
+                          {record.tags.map((t: string) => (
+                            <span key={t} className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{t}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <p className="text-sm text-gray-600">{record.notes || record.diagnosis}</p>
-                  </div>
-                )) : (
+                  ))
+                ) : (
                   <p className="text-sm text-gray-500 italic">No previous visit history found.</p>
                 )}
               </div>

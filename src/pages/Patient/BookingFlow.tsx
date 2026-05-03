@@ -20,6 +20,7 @@ export default function BookingFlow() {
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const fetchClinic = async () => {
@@ -43,14 +44,20 @@ export default function BookingFlow() {
   const doctor = clinic.doctors?.find((d: any) => d.id === state.doctorId);
   if (!doctor) return <div className="p-6 text-center">Doctor not found</div>;
 
-  const handleSendOtp = (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (name && phone.length >= 10) {
       setIsSubmitting(true);
-      setTimeout(() => {
-        setIsSubmitting(false);
+      setError("");
+      try {
+        await api.post("/auth/otp/send", { phone });
         setStep("otp");
-      }, 800);
+      } catch (err: any) {
+        setError("Failed to send OTP. Please try again.");
+        console.error("OTP send failed:", err);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -58,8 +65,15 @@ export default function BookingFlow() {
     e.preventDefault();
     if (otp.length === 4) {
       setIsSubmitting(true);
+      setError("");
       
       try {
+        // Verify OTP with real API
+        const authRes = await api.post("/auth/otp/verify", { phone, code: otp });
+        
+        // Store the patient token temporarily for this session
+        const patientToken = authRes.token;
+        
         // Add to queue
         const queueId = `q${Date.now()}`;
         
@@ -75,17 +89,36 @@ export default function BookingFlow() {
           tenantId: clinic.tenant_id
         });
 
-        setTimeout(() => {
-          setIsSubmitting(false);
-          navigate(`/clinic/${id}/confirmation`, { 
-            state: { ...state, name, phone, queueId },
-            replace: true
-          });
-        }, 1000);
-      } catch (error) {
-        console.error('Booking failed:', error);
+        // Persist booking info to localStorage so confirmation page survives refresh
+        const bookingData = {
+          ...state,
+          name,
+          phone,
+          queueId,
+          clinicId: id,
+          tenantId: clinic.tenant_id,
+          bookedAt: new Date().toISOString()
+        };
+        localStorage.setItem(`booking_${id}`, JSON.stringify(bookingData));
+
+        navigate(`/clinic/${id}/confirmation`, { 
+          state: { ...state, name, phone, queueId },
+          replace: true
+        });
+      } catch (err: any) {
+        setError("Invalid OTP. Please check the code and try again.");
+        console.error('Booking failed:', err);
         setIsSubmitting(false);
       }
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setError("");
+    try {
+      await api.post("/auth/otp/send", { phone });
+    } catch (err) {
+      setError("Failed to resend OTP.");
     }
   };
 
@@ -119,6 +152,13 @@ export default function BookingFlow() {
             </div>
           </div>
         </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-medium">
+            {error}
+          </div>
+        )}
 
         {step === "details" ? (
           <form onSubmit={handleSendOtp} className="flex-1 flex flex-col animate-in fade-in slide-in-from-right-4">
@@ -176,8 +216,11 @@ export default function BookingFlow() {
                 <ShieldCheck className="w-10 h-10 text-black" />
               </div>
               <h2 className="text-3xl font-bold text-gray-900 mb-2">Enter Code</h2>
-              <p className="text-gray-500 text-center mb-8 text-lg">
+              <p className="text-gray-500 text-center mb-2 text-lg">
                 Sent to +91 {phone}
+              </p>
+              <p className="text-gray-400 text-center mb-8 text-sm">
+                Check server console for the OTP code
               </p>
               
               <Input 
@@ -190,7 +233,7 @@ export default function BookingFlow() {
                 required
               />
               
-              <button type="button" className="mt-6 text-black font-bold hover:underline">
+              <button type="button" className="mt-6 text-black font-bold hover:underline" onClick={handleResendOtp}>
                 Resend Code
               </button>
             </div>

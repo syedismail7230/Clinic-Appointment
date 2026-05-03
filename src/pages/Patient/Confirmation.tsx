@@ -6,11 +6,23 @@ import { Button } from "@/components/ui/button";
 import { useQueue } from "@/lib/store";
 import { api } from "@/lib/api";
 
+interface BookingState {
+  doctorId: string;
+  slot: string;
+  name: string;
+  phone: string;
+  date?: string;
+  queueId?: string;
+}
+
 export default function Confirmation() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const state = location.state as { doctorId: string, slot: string, name: string, phone: string, date?: string, queueId?: string } | null;
+  
+  // Try router state first, then fall back to localStorage
+  const routerState = location.state as BookingState | null;
+  const [state, setState] = useState<BookingState | null>(routerState);
   
   const [clinic, setClinic] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -18,6 +30,28 @@ export default function Confirmation() {
   const myQueueItem = queue.find(q => q.id === state?.queueId);
 
   const [waitTime, setWaitTime] = useState(15);
+
+  // Recover state from localStorage if router state is missing (page refresh)
+  useEffect(() => {
+    if (!state && id) {
+      const saved = localStorage.getItem(`booking_${id}`);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setState({
+            doctorId: parsed.doctorId,
+            slot: parsed.slot,
+            name: parsed.name,
+            phone: parsed.phone,
+            date: parsed.date,
+            queueId: parsed.queueId,
+          });
+        } catch {
+          // Invalid saved data
+        }
+      }
+    }
+  }, [id, state]);
 
   useEffect(() => {
     const fetchClinic = async () => {
@@ -43,7 +77,17 @@ export default function Confirmation() {
 
   if (loading) return <div className="p-16 text-center">Loading...</div>;
   if (!clinic || !state) {
-    return <div className="p-6 text-center">Booking not found</div>;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gray-50">
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Booking not found</h2>
+          <p className="text-gray-500 mb-6">This booking session may have expired.</p>
+          <Button onClick={() => navigate('/')} className="rounded-xl">
+            Go to Home
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   const doctor = clinic.doctors?.find((d: any) => d.id === state.doctorId);
@@ -60,7 +104,7 @@ export default function Confirmation() {
     const doctorQueue = queue.filter(q => q.doctor === doctor.name);
     const inConsultation = doctorQueue.find(q => q.status === 'in-consultation');
     if (inConsultation) {
-      currentConsultingToken = inConsultation.token;
+      currentConsultingToken = inConsultation.token || "--";
     }
     
     const myIndex = doctorQueue.findIndex(q => q.id === myQueueItem.id);
@@ -79,7 +123,7 @@ export default function Confirmation() {
             <CheckCircle2 className="w-12 h-12 text-white" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">Confirmed</h1>
-          <p className="text-lg text-gray-600 font-medium">Token #A-42</p>
+          <p className="text-lg text-gray-600 font-medium">Your booking is confirmed</p>
         </>
       );
     }
@@ -113,7 +157,7 @@ export default function Confirmation() {
         <div className="w-24 h-24 bg-black rounded-full flex items-center justify-center mb-6 shadow-xl animate-in zoom-in duration-500">
           <CheckCircle2 className="w-12 h-12 text-white" />
         </div>
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">You are in clinic</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-gray-900 mb-2">You are in queue</h1>
         <p className="text-lg text-gray-600 font-medium">Token #{myQueueItem.token}</p>
       </>
     );
@@ -235,7 +279,11 @@ export default function Confirmation() {
 
           <Button 
             className="w-full h-14 text-lg rounded-xl font-bold mt-4"
-            onClick={() => navigate('/')}
+            onClick={() => {
+              // Clean up persisted booking data
+              localStorage.removeItem(`booking_${id}`);
+              navigate('/');
+            }}
           >
             Done
           </Button>

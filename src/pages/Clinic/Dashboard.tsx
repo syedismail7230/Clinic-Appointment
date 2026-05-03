@@ -86,7 +86,7 @@ export default function ClinicDashboard() {
         </nav>
 
         <div className="p-4 border-t mt-auto bg-white">
-          <Button variant="ghost" className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => navigate("/admin")}>
+          <Button variant="ghost" className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => { localStorage.removeItem('token'); navigate("/admin"); }}>
             <LogOut className="w-5 h-5 mr-3" />
             Sign Out
           </Button>

@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { Calendar as CalendarIcon, Clock, Plus, Trash2, Save } from "lucide-react";
+import { Calendar as CalendarIcon, Clock, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
 import { api } from "@/lib/api";
 
 export default function ScheduleView() {
@@ -11,58 +12,63 @@ export default function ScheduleView() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
   
-  // Real state from backend: { [doctorId_date]: ["09:00 AM", ...] }
   const [availability, setAvailability] = useState<Record<string, string[]>>({});
   const [newTime, setNewTime] = useState("");
 
-  const fetchScheduleAndDoctors = async () => {
-      try {
-        setLoading(true);
-        const [clinics, slots] = await Promise.all([
-          api.get('/clinics'),
-          api.get('/admin/slots')
-        ]);
-        
-        if (clinics.length > 0) {
-          const docs = clinics[0].doctors || [];
-          setClinicDoctors(docs);
-          if (docs.length > 0 && !selectedDoctor) setSelectedDoctor(docs[0].id);
-        }
-        
-        // Group slots by doctor and date
-        const grouped: Record<string, string[]> = {};
-        for (const slot of slots) {
-          // If a slot has no date, we can treat it as recurring, but for this view, we map it exactly as it came from the DB
-          const dateKey = slot.date || new Date().toISOString().split('T')[0]; // fallback
-          const key = `${slot.doctor_id}_${dateKey}`;
-          if (!grouped[key]) grouped[key] = [];
-          if (!grouped[key].includes(slot.slot_time)) grouped[key].push(slot.slot_time);
-        }
-        
-        // Sort individual time lists
-        Object.keys(grouped).forEach(k => {
-          grouped[k].sort();
-        });
-        
-        setAvailability(grouped);
-      } catch (error) {
-        console.error('Failed to fetch schedule data:', error);
-      } finally {
-        setLoading(false);
+  // Doctor management
+  const [isAddDoctorOpen, setIsAddDoctorOpen] = useState(false);
+  const [newDoctor, setNewDoctor] = useState({ name: '', specialty: '' });
+  const [addingDoctor, setAddingDoctor] = useState(false);
+
+  const fetchDoctors = async () => {
+    try {
+      const doctors = await api.get('/admin/doctors');
+      setClinicDoctors(doctors);
+      if (doctors.length > 0 && !selectedDoctor) {
+        setSelectedDoctor(doctors[0].id);
       }
+    } catch (error) {
+      console.error('Failed to fetch doctors:', error);
+    }
+  };
+
+  const fetchSlots = async () => {
+    try {
+      const slots = await api.get('/admin/slots');
+      const grouped: Record<string, string[]> = {};
+      for (const slot of slots) {
+        const dateKey = slot.date || 'recurring';
+        const key = `${slot.doctor_id}_${dateKey}`;
+        if (!grouped[key]) grouped[key] = [];
+        if (!grouped[key].includes(slot.slot_time)) grouped[key].push(slot.slot_time);
+      }
+      Object.keys(grouped).forEach(k => {
+        grouped[k].sort();
+      });
+      setAvailability(grouped);
+    } catch (error) {
+      console.error('Failed to fetch slots:', error);
+    }
+  };
+
+  const fetchAll = async () => {
+    setLoading(true);
+    await Promise.all([fetchDoctors(), fetchSlots()]);
+    setLoading(false);
   };
 
   useEffect(() => {
-    fetchScheduleAndDoctors();
+    fetchAll();
   }, []);
 
-  const currentKey = `${selectedDoctor}_${selectedDate}`;
-  const currentSlots = availability[currentKey] || [];
+  // Show date-specific slots, falling back to recurring slots
+  const dateKey = `${selectedDoctor}_${selectedDate}`;
+  const recurringKey = `${selectedDoctor}_recurring`;
+  const currentSlots = availability[dateKey] || availability[recurringKey] || [];
 
   const handleAddSlot = async () => {
-    if (!newTime) return;
+    if (!newTime || !selectedDoctor) return;
     
-    // Format time to AM/PM for consistency
     const [hours, minutes] = newTime.split(':');
     const hour = parseInt(hours, 10);
     const ampm = hour >= 12 ? 'PM' : 'AM';
@@ -79,7 +85,7 @@ export default function ScheduleView() {
         
         setAvailability(prev => ({
           ...prev,
-          [currentKey]: [...(prev[currentKey] || []), formattedTime].sort()
+          [dateKey]: [...(prev[dateKey] || []), formattedTime].sort()
         }));
       } catch (error) {
         console.error('Failed to add slot:', error);
@@ -98,10 +104,42 @@ export default function ScheduleView() {
       
       setAvailability(prev => ({
         ...prev,
-        [currentKey]: prev[currentKey].filter(t => t !== timeToRemove)
+        [dateKey]: (prev[dateKey] || []).filter(t => t !== timeToRemove)
       }));
     } catch (error) {
       console.error('Failed to remove slot:', error);
+    }
+  };
+
+  const handleAddDoctor = async () => {
+    if (!newDoctor.name) return;
+    setAddingDoctor(true);
+    try {
+      await api.post('/admin/doctors', {
+        name: newDoctor.name,
+        specialty: newDoctor.specialty
+      });
+      await fetchDoctors();
+      setIsAddDoctorOpen(false);
+      setNewDoctor({ name: '', specialty: '' });
+    } catch (error) {
+      console.error('Failed to add doctor:', error);
+    } finally {
+      setAddingDoctor(false);
+    }
+  };
+
+  const handleRemoveDoctor = async (doctorId: string) => {
+    if (!confirm('Are you sure? This will also delete all their slots.')) return;
+    try {
+      await api.delete(`/admin/doctors/${doctorId}`);
+      if (selectedDoctor === doctorId) {
+        setSelectedDoctor('');
+      }
+      await fetchDoctors();
+      await fetchSlots();
+    } catch (error) {
+      console.error('Failed to remove doctor:', error);
     }
   };
 
@@ -110,7 +148,7 @@ export default function ScheduleView() {
     <div className="animate-in fade-in duration-300 max-w-4xl mx-auto">
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-gray-900">Doctor Availability</h2>
-        <p className="text-gray-500">Manage schedules and appointment slots for doctors.</p>
+        <p className="text-gray-500">Manage doctors, schedules, and appointment slots.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -121,16 +159,39 @@ export default function ScheduleView() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Doctor</label>
-              <select
-                className="w-full h-10 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-                value={selectedDoctor}
-                onChange={(e) => setSelectedDoctor(e.target.value)}
-              >
-                {clinicDoctors.map(doc => (
-                  <option key={doc.id} value={doc.id}>{doc.name}</option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">Doctor</label>
+                <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => setIsAddDoctorOpen(true)}>
+                  <UserPlus className="w-3 h-3 mr-1" /> Add
+                </Button>
+              </div>
+              {clinicDoctors.length > 0 ? (
+                <div className="space-y-2">
+                  {clinicDoctors.map(doc => (
+                    <div 
+                      key={doc.id} 
+                      className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition-all ${selectedDoctor === doc.id ? 'border-black bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}
+                      onClick={() => setSelectedDoctor(doc.id)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900 truncate">{doc.name}</div>
+                        <div className="text-xs text-gray-500">{doc.specialty || 'General'}</div>
+                      </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRemoveDoctor(doc.id); }}
+                        className="ml-2 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors shrink-0"
+                        title="Remove doctor"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-4 border border-dashed rounded-lg text-sm text-gray-500">
+                  No doctors yet. Add one to get started.
+                </div>
+              )}
             </div>
             
             <div>
@@ -161,14 +222,21 @@ export default function ScheduleView() {
                 className="w-full sm:w-40"
                 value={newTime}
                 onChange={(e) => setNewTime(e.target.value)}
+                disabled={!selectedDoctor}
               />
-              <Button onClick={handleAddSlot} variant="secondary" className="w-full sm:w-auto">
+              <Button onClick={handleAddSlot} variant="secondary" className="w-full sm:w-auto" disabled={!selectedDoctor || !newTime}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Slot
               </Button>
             </div>
 
-            {currentSlots.length > 0 ? (
+            {!selectedDoctor ? (
+              <div className="text-center py-12 border-2 border-dashed rounded-xl border-gray-200 bg-gray-50">
+                <Clock className="w-8 h-8 text-gray-400 mx-auto mb-3" />
+                <h3 className="text-sm font-medium text-gray-900">Select a doctor</h3>
+                <p className="text-sm text-gray-500 mt-1">Choose a doctor from the left panel to manage their slots.</p>
+              </div>
+            ) : currentSlots.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {currentSlots.map(slot => (
                   <div key={slot} className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
@@ -195,6 +263,48 @@ export default function ScheduleView() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Add Doctor Modal */}
+      <Modal isOpen={isAddDoctorOpen} onClose={() => setIsAddDoctorOpen(false)} title="Add Doctor">
+        <div className="space-y-4 max-w-md w-full">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Doctor Name</label>
+            <Input 
+              placeholder="e.g. Dr. Sarah Wilson"
+              value={newDoctor.name}
+              onChange={e => setNewDoctor({...newDoctor, name: e.target.value})}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Specialty</label>
+            <select
+              className="w-full h-10 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+              value={newDoctor.specialty}
+              onChange={e => setNewDoctor({...newDoctor, specialty: e.target.value})}
+            >
+              <option value="">Select specialty...</option>
+              <option value="General Physician">General Physician</option>
+              <option value="Cardiologist">Cardiologist</option>
+              <option value="Dermatologist">Dermatologist</option>
+              <option value="Pediatrician">Pediatrician</option>
+              <option value="Orthopedic">Orthopedic</option>
+              <option value="Neurologist">Neurologist</option>
+              <option value="ENT Specialist">ENT Specialist</option>
+              <option value="Ophthalmologist">Ophthalmologist</option>
+              <option value="Gynecologist">Gynecologist</option>
+              <option value="Dentist">Dentist</option>
+              <option value="Psychiatrist">Psychiatrist</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button variant="outline" onClick={() => setIsAddDoctorOpen(false)}>Cancel</Button>
+            <Button onClick={handleAddDoctor} disabled={!newDoctor.name || addingDoctor}>
+              {addingDoctor ? 'Adding...' : 'Add Doctor'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

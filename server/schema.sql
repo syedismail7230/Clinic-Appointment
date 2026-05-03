@@ -1,13 +1,3 @@
--- Clear existing schema
-DROP TABLE IF EXISTS slots;
-DROP TABLE IF EXISTS doctors;
-DROP TABLE IF EXISTS clinics;
-DROP TABLE IF EXISTS queue;
-DROP TABLE IF EXISTS appointments;
-DROP TABLE IF EXISTS patients;
-DROP TABLE IF EXISTS users;
-DROP TABLE IF EXISTS tenants;
-
 -- Tenants (Clinic Owners/Entities)
 CREATE TABLE IF NOT EXISTS tenants (
     id TEXT PRIMARY KEY,
@@ -38,10 +28,14 @@ CREATE TABLE IF NOT EXISTS clinics (
     tenant_id TEXT,
     name TEXT NOT NULL,
     address TEXT,
+    maps_link TEXT,
+    logo_url TEXT,
+    gst_number TEXT,
     distance TEXT,
     rating REAL,
     lat REAL,
     lng REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );
 
@@ -52,6 +46,7 @@ CREATE TABLE IF NOT EXISTS doctors (
     name TEXT NOT NULL,
     specialty TEXT,
     clinic_id TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (tenant_id) REFERENCES tenants(id),
     FOREIGN KEY (clinic_id) REFERENCES clinics(id)
 );
@@ -79,6 +74,7 @@ CREATE TABLE IF NOT EXISTS queue (
     token TEXT,
     prescription TEXT,
     medicines TEXT, -- JSON string
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );
 
@@ -94,6 +90,9 @@ CREATE TABLE IF NOT EXISTS appointments (
     status TEXT,
     notes TEXT,
     tags TEXT, -- JSON string
+    prescription TEXT,
+    medicines TEXT, -- JSON string
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );
 
@@ -103,7 +102,8 @@ CREATE TABLE IF NOT EXISTS patients (
     tenant_id TEXT,
     name TEXT NOT NULL,
     phone TEXT,
-    lastVisit TEXT,
+    last_visit TEXT,
     totalVisits INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 );
