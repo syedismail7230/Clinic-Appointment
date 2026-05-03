@@ -98,12 +98,22 @@ export default function PatientHome() {
   const handleScan = (result: any[]) => {
     if (result && result.length > 0) {
       const code = result[0].rawValue;
+      let clinicId = null;
+
       if (code.includes('/clinic/')) {
         const parts = code.split('/clinic/');
-        const clinicId = parts[1].split('/')[0];
-        navigate(`/clinic/${clinicId}`);
-      } else if (clinics.some(c => c.id === code)) {
-        navigate(`/clinic/${code}`);
+        clinicId = parts[1].split('/')[0].split('?')[0];
+      } else if (code.includes('?clinic=')) {
+        const urlParams = new URLSearchParams(code.split('?')[1]);
+        clinicId = urlParams.get('clinic');
+      } else {
+        clinicId = code; // try treating the raw text as an ID
+      }
+
+      if (clinicId && clinics.some(c => c.id === clinicId || c.tenant_id === clinicId)) {
+        // If it matched a tenant_id, find the first clinic for that tenant
+        const matchedClinic = clinics.find(c => c.id === clinicId) || clinics.find(c => c.tenant_id === clinicId);
+        navigate(`/clinic/${matchedClinic.id}`);
       } else {
         alert("Invalid clinic QR code");
       }
