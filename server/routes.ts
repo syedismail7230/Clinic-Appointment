@@ -117,10 +117,19 @@ router.post('/onboard', async (req, res) => {
 
 // Clinics (Public/Tenant Specific)
 router.get('/clinics', async (req, res) => {
-    const tenantId = req.query.tenantId || DEFAULT_TENANT_ID;
+    const tenantId = req.query.tenantId;
     
-    const { data: clinics } = await supabase.from('clinics').select('*').or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
-    const { data: doctors } = await supabase.from('doctors').select('*').or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
+    let clinicsQuery = supabase.from('clinics').select('*');
+    if (tenantId) {
+        clinicsQuery = clinicsQuery.or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
+    }
+    const { data: clinics } = await clinicsQuery;
+    
+    let doctorsQuery = supabase.from('doctors').select('*');
+    if (tenantId) {
+        doctorsQuery = doctorsQuery.or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
+    }
+    const { data: doctors } = await doctorsQuery;
     
     const result = (clinics || []).map(clinic => ({
         ...clinic,
@@ -450,21 +459,107 @@ router.delete('/admin/slots', authenticateToken, async (req: any, res) => {
 router.get('/admin/tenants', authenticateToken, async (req: any, res) => {
     if (req.user.role !== 'root') return res.status(403).json({ error: 'Root access required' });
     const { data: tenants } = await supabase.from('tenants').select('*');
-    res.json(tenants || []);
+    
+    const { data: doctors } = await supabase.from('doctors').select('tenant_id');
+    const { data: patients } = await supabase.from('patients').select('tenant_id');
+    
+    const result = (tenants || []).map(t => ({
+        ...t,
+        doctorsCount: (doctors || []).filter(d => d.tenant_id === t.id).length,
+        patientsCount: (patients || []).filter(p => p.tenant_id === t.id).length
+    }));
+    
+    res.json(result);
+});
+
+router.get('/admin/tenants/:id', authenticateToken, async (req: any, res) => {
+    if (req.user.role !== 'root') return res.status(403).json({ error: 'Root access required' });
+    
+    const { data: tenant, error: tenantErr } = await supabase.from('tenants').select('*').eq('id', req.params.id).single();
+    if (tenantErr || !tenant) {
+        console.error('Tenant fetch error:', tenantErr);
+        return res.status(404).json({ error: 'Tenant not found', details: tenantErr });
+    }
+
+    const { data: clinic, error: clinicErr } = await supabase.from('clinics').select('*').eq('tenant_id', req.params.id).limit(1).single();
+    if (clinicErr && clinicErr.code !== 'PGRST116') {
+        console.error('Clinic fetch error:', clinicErr);
+    }
+    const { data: doctors } = await supabase.from('doctors').select('*').eq('tenant_id', req.params.id);
+    const { count: patientsCount } = await supabase.from('patients').select('*', { count: 'exact', head: true }).eq('tenant_id', req.params.id);
+    
+    // Count appointments this month
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    const { count: appointmentsCount } = await supabase.from('appointments').select('*', { count: 'exact', head: true }).eq('tenant_id', req.params.id).gte('date', startOfMonth.toISOString().split('T')[0]);
+
+    res.json({
+        ...tenant,
+        clinic: clinic || {},
+        doctors: doctors || [],
+        patientsCount: patientsCount || 0,
+        appointmentsCount: appointmentsCount || 0
+    });
 });
 
 router.patch('/admin/tenants/:id', authenticateToken, async (req: any, res) => {
     if (req.user.role !== 'root') return res.status(403).json({ error: 'Root access required' });
     
-    const { status, plan } = req.body;
-    const updates: any = {};
-    if (status) updates.status = status;
-    if (plan) updates.plan = plan;
+    const { status, plan, subscription_end, name, email, phone, address, maps_link, gst_number } = req.body;
     
-    if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No updates provided' });
+    const tenantUpdates: any = {};
+    if (status) tenantUpdates.status = status;
+    if (plan) tenantUpdates.plan = plan;
+    if (subscription_end !== undefined) tenantUpdates.subscription_end = subscription_end;
+    if (name) tenantUpdates.name = name;
+    if (email) tenantUpdates.email = email;
+    if (phone) tenantUpdates.phone = phone;
     
-    await supabase.from('tenants').update(updates).eq('id', req.params.id);
+    if (Object.keys(tenantUpdates).length > 0) {
+        await supabase.from('tenants').update(tenantUpdates).eq('id', req.params.id);
+    }
+    
+    const clinicUpdates: any = {};
+    if (name) clinicUpdates.name = name;
+    if (address !== undefined) clinicUpdates.address = address;
+    if (maps_link !== undefined) clinicUpdates.maps_link = maps_link;
+    if (gst_number !== undefined) clinicUpdates.gst_number = gst_number;
+    
+    if (Object.keys(clinicUpdates).length > 0) {
+        await supabase.from('clinics').update(clinicUpdates).eq('tenant_id', req.params.id);
+    }
+    
     res.json({ success: true });
+});
+
+router.post('/admin/impersonate', authenticateToken, async (req: any, res) => {
+    if (req.user.role !== 'root') return res.status(403).json({ error: 'Root access required' });
+    
+    const { tenant_id } = req.body;
+    if (!tenant_id) return res.status(400).json({ error: 'tenant_id required' });
+
+    const { data: tenant } = await supabase.from('tenants').select('*').eq('id', tenant_id).single();
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+
+    // Create an impersonation token acting as an admin for the target tenant
+    const userPayload = {
+        id: `impersonated-${req.user.id}`,
+        email: tenant.email,
+        phone: tenant.phone,
+        role: 'admin',
+        tenant_id: tenant.id
+    };
+
+    const token = generateToken(userPayload);
+    res.json({ token, user: userPayload });
+});
+
+router.post('/admin/tenants/:id/qr', authenticateToken, async (req: any, res) => {
+    if (req.user.role !== 'root') return res.status(403).json({ error: 'Root access required' });
+    
+    // Provide a simple QR code URL pointing to the tenant ID
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${req.params.id}`;
+    res.json({ qrUrl });
 });
 
 export default router;
