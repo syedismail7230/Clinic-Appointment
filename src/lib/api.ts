@@ -13,7 +13,7 @@ const handleAuthError = (response: Response, endpoint: string) => {
         localStorage.removeItem('token');
         window.location.href = '/admin';
     }
-    throw new Error(`API error: ${response.statusText || 'Unauthorized'}`);
+    throw new Error(`API error: ${response.statusText || response.status || 'Unknown error'}`);
 };
 
 export const api = {
