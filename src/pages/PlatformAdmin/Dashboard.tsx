@@ -17,28 +17,28 @@ export default function PlatformAdminDashboard() {
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
             <ShieldAlert className="w-5 h-5 text-white" />
           </div>
-          <h1 className="font-bold text-xl tracking-tight text-white">Platform Admin</h1>
+          <h1 className="font-bold text-xl tracking-tight text-white">QuickCare Admin</h1>
         </div>
-        
+
         <nav className="p-4 space-y-2 flex-1">
-          <Button 
-            variant={activeTab === "tenants" ? "secondary" : "ghost"} 
+          <Button
+            variant={activeTab === "tenants" ? "secondary" : "ghost"}
             className={`w-full justify-start ${activeTab === "tenants" ? "bg-slate-800 text-white hover:bg-slate-700" : "hover:bg-slate-800 hover:text-white"}`}
             onClick={() => setActiveTab("tenants")}
           >
             <Building2 className="w-5 h-5 mr-3" />
             Tenants (Clinics)
           </Button>
-          <Button 
-            variant={activeTab === "subscriptions" ? "secondary" : "ghost"} 
+          <Button
+            variant={activeTab === "subscriptions" ? "secondary" : "ghost"}
             className={`w-full justify-start ${activeTab === "subscriptions" ? "bg-slate-800 text-white hover:bg-slate-700" : "hover:bg-slate-800 hover:text-white"}`}
             onClick={() => setActiveTab("subscriptions")}
           >
             <CreditCard className="w-5 h-5 mr-3" />
             Subscriptions
           </Button>
-          <Button 
-            variant={activeTab === "settings" ? "secondary" : "ghost"} 
+          <Button
+            variant={activeTab === "settings" ? "secondary" : "ghost"}
             className={`w-full justify-start ${activeTab === "settings" ? "bg-slate-800 text-white hover:bg-slate-700" : "hover:bg-slate-800 hover:text-white"}`}
             onClick={() => setActiveTab("settings")}
           >
