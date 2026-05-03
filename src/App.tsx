@@ -5,6 +5,7 @@
 
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import AuthGuard from "./components/AuthGuard";
+import LandingPage from "./pages/Landing";
 import PatientHome from "./pages/Patient/Home";
 import ClinicView from "./pages/Patient/ClinicView";
 import BookingFlow from "./pages/Patient/BookingFlow";
@@ -20,8 +21,11 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        {/* Patient Routes (public) */}
-        <Route path="/" element={<PatientHome />} />
+        {/* Marketing Landing Page */}
+        <Route path="/" element={<LandingPage />} />
+
+        {/* Patient App Routes (public) */}
+        <Route path="/app" element={<PatientHome />} />
         <Route path="/clinic/:id" element={<ClinicView />} />
         <Route path="/clinic/:id/book" element={<BookingFlow />} />
         <Route path="/clinic/:id/confirmation" element={<Confirmation />} />
