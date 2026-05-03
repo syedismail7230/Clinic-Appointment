@@ -97,7 +97,8 @@ export default function PatientHome() {
 
   const handleScan = (result: any[]) => {
     if (result && result.length > 0) {
-      const code = result[0].rawValue;
+      const code = result[0].rawValue?.trim();
+      console.log("Scanned QR Code:", code);
       let clinicId = null;
 
       if (code.includes('/clinic/')) {
@@ -110,11 +111,16 @@ export default function PatientHome() {
         clinicId = code; // try treating the raw text as an ID
       }
 
+      console.log("Extracted clinicId:", clinicId);
+      console.log("Available clinics:", clinics);
+
       if (clinicId && clinics.some(c => c.id === clinicId || c.tenant_id === clinicId)) {
         // If it matched a tenant_id, find the first clinic for that tenant
         const matchedClinic = clinics.find(c => c.id === clinicId) || clinics.find(c => c.tenant_id === clinicId);
+        console.log("Navigating to clinic:", matchedClinic.id);
         navigate(`/clinic/${matchedClinic.id}`);
       } else {
+        console.warn("Invalid clinic QR code or clinic not loaded. clinicId:", clinicId);
         alert("Invalid clinic QR code");
       }
       setShowScanner(false);
