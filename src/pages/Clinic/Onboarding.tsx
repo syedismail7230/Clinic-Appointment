@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Building, Phone, Mail, User, CheckCircle2, ArrowRight, ShieldCheck, CreditCard } from "lucide-react";
+import { Building, Phone, Mail, User, CheckCircle2, ArrowRight, ShieldCheck, CreditCard, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,16 +29,21 @@ export default function Onboarding() {
     clinicName: "",
     email: "",
     phone: "",
+    password: "",
     otp: ""
   });
 
   const handleSendOTP = async () => {
-    if (!formData.name || !formData.clinicName || !formData.email || !formData.phone) {
+    if (!formData.name || !formData.clinicName || !formData.email || !formData.phone || !formData.password) {
       setError("Please fill out all fields.");
       return;
     }
     if (formData.phone.length < 10) {
       setError("Please enter a valid 10-digit phone number.");
+      return;
+    }
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters long.");
       return;
     }
     
@@ -93,7 +98,7 @@ export default function Onboarding() {
 
       // 2. Open Razorpay Checkout
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_placeholder', // You should add this to frontend .env
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_placeholder', 
         amount: order.amount,
         currency: order.currency,
         name: "QuickCare Premium",
@@ -108,6 +113,7 @@ export default function Onboarding() {
               name: formData.clinicName,
               email: formData.email,
               phone: formData.phone,
+              password: formData.password,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_order_id: response.razorpay_order_id,
               razorpay_signature: response.razorpay_signature
@@ -115,14 +121,10 @@ export default function Onboarding() {
 
             if (onboardRes.success) {
               setStep(4);
-              // Auto login after success
-              setTimeout(async () => {
-                 // Re-login to get proper token with tenant_id
-                 const loginRes = await api.post("/auth/otp/send", { phone: formData.phone });
-                 // Note: Ideally we'd return the token directly from /onboard, 
-                 // but to keep it simple, we redirect to login page for now.
-                 navigate('/admin');
-              }, 2000);
+              // Auto login after success or redirect
+              setTimeout(() => {
+                  navigate('/admin');
+              }, 3000);
             }
           } catch (err: any) {
             setError("Payment verified, but failed to create account: " + err.message);
@@ -217,7 +219,14 @@ export default function Onboarding() {
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <Input type="tel" className="pl-10" placeholder="e.g. 9876543210" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">We will send an OTP to verify this number.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Set Password</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input type="password" className="pl-10" placeholder="••••••••" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Minimum 6 characters.</p>
                 </div>
                 
                 <Button className="w-full mt-6 h-11 text-base" onClick={handleSendOTP} disabled={loading}>

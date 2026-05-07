@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { supabase } from './db.js';
 import { v4 as uuidv4 } from 'uuid';
-import { generateOTP, verifyOTP, generateToken, authenticateToken, optionalAuthenticateToken } from './auth.js';
+import { generateOTP, verifyOTP, generateToken, authenticateToken, optionalAuthenticateToken, hashPassword, comparePassword } from './auth.js';
 import { notifyQueueUpdate } from './socket.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
@@ -40,6 +40,37 @@ router.post('/auth/otp/verify', async (req, res) => {
     }
 });
 
+router.post('/login-password', async (req, res) => {
+    const { phone, password } = req.body;
+
+    if (!phone || !password) {
+        return res.status(400).json({ error: 'Phone and password are required' });
+    }
+
+    try {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('phone', phone)
+            .single();
+
+        if (error || !user || !user.password_hash) {
+            return res.status(401).json({ error: 'Invalid phone or password' });
+        }
+
+        const isMatch = await comparePassword(password, user.password_hash);
+        if (!isMatch) {
+            return res.status(401).json({ error: 'Invalid phone or password' });
+        }
+
+        const token = generateToken(user);
+        res.json({ token, user });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Razorpay Setup
 const razorpay = new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID || '',
@@ -63,10 +94,10 @@ router.post('/payments/create-order', async (req, res) => {
 
 // Onboarding
 router.post('/onboard', async (req, res) => {
-    const { name, email, phone, razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
+    const { name, email, phone, password, razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
     
-    if (!name || !email || !phone) {
-        return res.status(400).json({ error: 'Name, email, and phone are required' });
+    if (!name || !email || !phone || !password) {
+        return res.status(400).json({ error: 'Name, email, phone, and password are required' });
     }
     if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
         return res.status(400).json({ error: 'Payment verification details required' });
@@ -88,6 +119,8 @@ router.post('/onboard', async (req, res) => {
     const clinicId = uuidv4();
     
     try {
+        const hashedPassword = await hashPassword(password);
+
         // Insert tenant
         const { error: tenantErr } = await supabase.from('tenants').insert({
             id: tenantId, name, email, phone,
@@ -101,7 +134,8 @@ router.post('/onboard', async (req, res) => {
 
         // Insert user (admin)
         await supabase.from('users').insert({
-            id: userId, email, phone, role: 'admin', tenant_id: tenantId
+            id: userId, email, phone, role: 'admin', tenant_id: tenantId,
+            password_hash: hashedPassword
         });
         
         // Create default clinic
