@@ -6,6 +6,8 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import AuthGuard from "./components/AuthGuard";
 import LandingPage from "./pages/Landing";
+import PrivacyPolicy from "./pages/Landing/components/PrivacyPolicy";
+import TermsOfService from "./pages/Landing/components/TermsOfService";
 import PatientHome from "./pages/Patient/Home";
 import ClinicView from "./pages/Patient/ClinicView";
 import BookingFlow from "./pages/Patient/BookingFlow";
@@ -23,6 +25,8 @@ export default function App() {
       <Routes>
         {/* Marketing Landing Page */}
         <Route path="/" element={<LandingPage />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfService />} />
 
         {/* Patient App Routes (public) */}
         <Route path="/app" element={<PatientHome />} />

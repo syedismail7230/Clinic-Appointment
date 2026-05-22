@@ -76,8 +76,10 @@ export default function FinalCTA() {
             <a href="/admin" className="hover:text-white transition-colors">Clinic Login</a>
             <a href="/onboard" className="hover:text-white transition-colors">Get Started</a>
             <a href="mailto:hello@quickcare.in" className="hover:text-white transition-colors">Contact</a>
+            <button onClick={() => navigate('/privacy')} className="hover:text-white transition-colors">Privacy Policy</button>
+            <button onClick={() => navigate('/terms')} className="hover:text-white transition-colors">Terms of Service</button>
           </div>
-          <p className="text-white/20 text-sm">© 2025 QuickCare. All rights reserved.</p>
+          <p className="text-white/20 text-sm">© {new Date().getFullYear()} QuickCare. All rights reserved.</p>
         </div>
       </footer>
     </>

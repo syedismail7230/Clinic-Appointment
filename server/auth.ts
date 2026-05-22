@@ -1,15 +1,16 @@
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import { sendOTPWhatsApp, isWhatsAppConfigured } from './whatsapp.js';
 
 dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'quickcare-dev-secret-change-in-production';
-const MESSAGE_CENTRAL_CUSTOMER_ID = process.env.MESSAGE_CENTRAL_CUSTOMER_ID;
-const MESSAGE_CENTRAL_AUTH_TOKEN = process.env.MESSAGE_CENTRAL_AUTH_TOKEN;
 
-// Temporary store for verification IDs. In production, this might be Redis.
-const OTPS = new Map<string, { verificationId: string, expires: number }>();
+// In-memory OTP store. Key = phone, value = { code, expires }.
+// In production, replace with Redis for multi-instance deployments.
+const OTPS = new Map<string, { code: string; expires: number }>();
 const OTP_RATE_LIMIT = new Map<string, { count: number, resetAt: number }>();
 
 const MAX_OTP_PER_HOUR = 5;
@@ -18,7 +19,7 @@ export async function generateOTP(phone: string): Promise<void> {
     // Rate limiting: max 5 OTPs per phone per hour
     const now = Date.now();
     const rateEntry = OTP_RATE_LIMIT.get(phone);
-    
+
     if (rateEntry) {
         if (now < rateEntry.resetAt) {
             if (rateEntry.count >= MAX_OTP_PER_HOUR) {
@@ -33,77 +34,48 @@ export async function generateOTP(phone: string): Promise<void> {
         OTP_RATE_LIMIT.set(phone, { count: 1, resetAt: now + 60 * 60 * 1000 });
     }
 
-    if (!MESSAGE_CENTRAL_CUSTOMER_ID || !MESSAGE_CENTRAL_AUTH_TOKEN) {
-        console.warn('Missing Message Central keys, falling back to mock OTP');
-        const code = Math.floor(1000 + Math.random() * 9000).toString();
-        OTPS.set(phone, { verificationId: code, expires: Date.now() + 5 * 60 * 1000 });
-        console.log(`[MOCK OTP] Sent to ${phone}: ${code}`);
+    // Generate a cryptographically random 6-digit OTP
+    const code = (crypto.randomInt(100000, 999999)).toString();
+    OTPS.set(phone, { code, expires: now + 5 * 60 * 1000 }); // 5-minute window
+
+    if (!isWhatsAppConfigured()) {
+        // Mock fallback: log to console when credentials are not set
+        console.warn('[OTP] WhatsApp not configured — using mock mode');
+        console.log(`[MOCK OTP] Phone: ${phone}  Code: ${code}`);
         return;
     }
 
-    // Call Message Central API
-    const url = `https://cpaas.messagecentral.com/verification/v3/send?countryCode=91&customerId=${MESSAGE_CENTRAL_CUSTOMER_ID}&flowType=SMS&mobileNumber=${phone}`;
-    
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'authToken': MESSAGE_CENTRAL_AUTH_TOKEN
-        }
-    });
-
-    const result = await response.json();
-    
-    if (result.responseCode === 200 && result.data?.verificationId) {
-        OTPS.set(phone, {
-            verificationId: result.data.verificationId,
-            expires: Date.now() + 5 * 60 * 1000 // 5 minutes local expiration
-        });
-        console.log(`[OTP] Dispatched to ${phone} via Message Central (ID: ${result.data.verificationId})`);
-    } else {
-        console.error('[OTP] Message Central Error:', result);
-        throw new Error(result.message || 'Failed to send OTP via provider');
+    try {
+        await sendOTPWhatsApp(phone, code);
+        console.log(`[OTP] Sent to ${phone} via WhatsApp`);
+    } catch (err) {
+        // Remove the stored OTP so the user can retry cleanly
+        OTPS.delete(phone);
+        throw err;
     }
 }
 
 export async function verifyOTP(phone: string, code: string): Promise<boolean> {
     const entry = OTPS.get(phone);
     if (!entry) return false;
-    
+
     if (Date.now() > entry.expires) {
         OTPS.delete(phone);
         return false;
     }
 
-    if (!MESSAGE_CENTRAL_CUSTOMER_ID || !MESSAGE_CENTRAL_AUTH_TOKEN) {
-        // Mock fallback
-        if (entry.verificationId === code) {
-            OTPS.delete(phone);
-            return true;
-        }
-        return false;
+    // Constant-time comparison to prevent timing attacks
+    const expected = Buffer.from(entry.code);
+    const provided = Buffer.from(code);
+
+    if (expected.length !== provided.length) return false;
+
+    const match = crypto.timingSafeEqual(expected, provided);
+    if (match) {
+        OTPS.delete(phone); // single-use
+        return true;
     }
 
-    const verificationId = entry.verificationId;
-    const url = `https://cpaas.messagecentral.com/verification/v3/validateOtp?countryCode=91&mobileNumber=${phone}&verificationId=${verificationId}&customerId=${MESSAGE_CENTRAL_CUSTOMER_ID}&code=${code}`;
-
-    try {
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'authToken': MESSAGE_CENTRAL_AUTH_TOKEN
-            }
-        });
-
-        const result = await response.json();
-
-        if (result.responseCode === 200 && result.data?.verificationStatus === 'VERIFICATION_COMPLETED') {
-            OTPS.delete(phone);
-            return true;
-        }
-    } catch (error) {
-        console.error('[OTP] Validation error:', error);
-    }
-    
     return false;
 }
 

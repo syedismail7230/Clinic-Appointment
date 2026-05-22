@@ -3,6 +3,7 @@ import { supabase } from './db.js';
 import { v4 as uuidv4 } from 'uuid';
 import { generateOTP, verifyOTP, generateToken, authenticateToken, optionalAuthenticateToken, hashPassword, comparePassword } from './auth.js';
 import { notifyQueueUpdate } from './socket.js';
+import { sendBookingConfirmation, sendQueueUpdate } from './whatsapp.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 
@@ -263,6 +264,17 @@ router.post('/queue', optionalAuthenticateToken, async (req: any, res) => {
         }
 
         notifyQueueUpdate(tenantId);
+
+        // WhatsApp booking confirmation (fire-and-forget — never blocks the API response)
+        sendBookingConfirmation(
+            phone,
+            patientName,
+            doctor || 'the doctor',
+            todayStr,
+            time || '',
+            generatedToken
+        ).catch(err => console.error('[WhatsApp] Booking confirmation failed:', err.message));
+
         res.status(201).json({ id, token: generatedToken, tenantId });
     } catch (error: any) {
         console.error('[Queue] Insert error:', error.message);
@@ -285,6 +297,16 @@ router.patch('/queue/:id', authenticateToken, async (req: any, res) => {
     const { data: item } = await supabase.from('queue').select('*').eq('id', req.params.id).single();
     
     if (item?.tenant_id) notifyQueueUpdate(item.tenant_id);
+
+    // WhatsApp queue status notification (fire-and-forget)
+    if (status && item) {
+        sendQueueUpdate(
+            item.phone,
+            item.patientName,
+            item.token,
+            status
+        ).catch(err => console.error('[WhatsApp] Queue update notification failed:', err.message));
+    }
 
     // Sync appointment
     if (status === 'completed' && item) {

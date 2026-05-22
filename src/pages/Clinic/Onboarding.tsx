@@ -60,8 +60,8 @@ export default function Onboarding() {
   };
 
   const handleVerifyOTP = async () => {
-    if (!formData.otp || formData.otp.length !== 4) {
-      setError("Please enter the 4-digit OTP.");
+    if (!formData.otp || formData.otp.length !== 6) {
+      setError("Please enter the 6-digit OTP.");
       return;
     }
 
@@ -241,21 +241,21 @@ export default function Onboarding() {
                 <div className="text-center">
                   <ShieldCheck className="w-12 h-12 text-green-500 mx-auto mb-3" />
                   <h3 className="text-lg font-bold">Verify your phone</h3>
-                  <p className="text-sm text-gray-500">We've sent a 4-digit code to +91 {formData.phone}</p>
+                  <p className="text-sm text-gray-500">We've sent a 6-digit code via WhatsApp to +91 {formData.phone}</p>
                 </div>
                 
                 <div>
                   <Input 
                     type="text" 
-                    maxLength={4} 
+                    maxLength={6} 
                     className="text-center text-2xl tracking-widest h-14" 
-                    placeholder="••••" 
+                    placeholder="••••••" 
                     value={formData.otp} 
                     onChange={e => setFormData({...formData, otp: e.target.value.replace(/\D/g, '')})} 
                   />
                 </div>
                 
-                <Button className="w-full h-11 text-base" onClick={handleVerifyOTP} disabled={loading || formData.otp.length !== 4}>
+                <Button className="w-full h-11 text-base" onClick={handleVerifyOTP} disabled={loading || formData.otp.length !== 6}>
                   {loading ? 'Verifying...' : 'Verify OTP'}
                 </Button>
                 

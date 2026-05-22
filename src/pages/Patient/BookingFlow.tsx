@@ -63,7 +63,7 @@ export default function BookingFlow() {
 
   const handleVerifyAndBook = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp.length === 4) {
+    if (otp.length === 6) {
       setIsSubmitting(true);
       setError("");
       
@@ -220,16 +220,16 @@ export default function BookingFlow() {
                 Sent to +91 {phone}
               </p>
               <p className="text-gray-400 text-center mb-8 text-sm">
-                Check server console for the OTP code
+                Check your WhatsApp for the 6-digit code
               </p>
               
               <Input 
                 autoFocus
                 type="number"
-                placeholder="0000" 
+                placeholder="000000" 
                 value={otp} 
-                onChange={e => setOtp(e.target.value.slice(0, 4))}
-                className="h-16 w-48 text-center text-3xl tracking-[0.5em] rounded-xl font-mono bg-gray-50 border-transparent focus:border-black focus:bg-white transition-colors"
+                onChange={e => setOtp(e.target.value.slice(0, 6))}
+                className="h-16 w-52 text-center text-3xl tracking-[0.4em] rounded-xl font-mono bg-gray-50 border-transparent focus:border-black focus:bg-white transition-colors"
                 required
               />
               
@@ -242,7 +242,7 @@ export default function BookingFlow() {
               <Button 
                 type="submit" 
                 className="w-full h-14 text-lg rounded-xl font-bold"
-                disabled={otp.length !== 4 || isSubmitting}
+                disabled={otp.length !== 6 || isSubmitting}
               >
                 {isSubmitting ? "Confirming..." : "Verify & Book"}
               </Button>
