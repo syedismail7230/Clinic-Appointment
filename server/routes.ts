@@ -1,6 +1,20 @@
 import { Router } from 'express';
 import { supabase } from './db.js';
 import { v4 as uuidv4 } from 'uuid';
+
+// ─── Phone normalisation ───────────────────────────────────────────────────────
+// Always store & look up OTPs under the same key format: digits only, with
+// country code. E.g. "917698810804" regardless of what the frontend sends.
+function normalisePhone(raw: string): string {
+    // Strip everything except digits
+    const digits = raw.replace(/\D/g, '');
+    // If already has country code (12 digits starting with 91) keep it
+    if (digits.length === 12 && digits.startsWith('91')) return digits;
+    // If 10 digits, assume Indian number — prepend 91
+    if (digits.length === 10) return '91' + digits;
+    // Otherwise return as-is (handles other formats)
+    return digits;
+}
 import { generateOTP, verifyOTP, generateToken, authenticateToken, optionalAuthenticateToken, hashPassword, comparePassword } from './auth.js';
 import { notifyQueueUpdate } from './socket.js';
 import { sendBookingConfirmation, sendQueueUpdate } from './whatsapp.js';
@@ -12,8 +26,9 @@ const DEFAULT_TENANT_ID = 'default-tenant';
 
 // Auth Routes
 router.post('/auth/otp/send', async (req, res) => {
-    const { phone } = req.body;
-    if (!phone) return res.status(400).json({ error: 'Phone number required' });
+    const { phone: rawPhone } = req.body;
+    if (!rawPhone) return res.status(400).json({ error: 'Phone number required' });
+    const phone = normalisePhone(rawPhone);
     if (phone.length < 10) return res.status(400).json({ error: 'Invalid phone number' });
     try {
         await generateOTP(phone);
@@ -24,16 +39,34 @@ router.post('/auth/otp/send', async (req, res) => {
 });
 
 router.post('/auth/otp/verify', async (req, res) => {
-    const { phone, code } = req.body;
-    if (!phone || !code) return res.status(400).json({ error: 'Phone and code are required' });
-    
+    const { phone: rawPhone, code } = req.body;
+    if (!rawPhone || !code) return res.status(400).json({ error: 'Phone and code are required' });
+    const phone = normalisePhone(rawPhone);
+
     if (await verifyOTP(phone, code)) {
-        // Find or create user
-        let { data: user, error } = await supabase.from('users').select('*').eq('phone', phone).single();
-        
+        // Look up user trying all stored phone formats:
+        // 1. Normalised  e.g. "917698810804"
+        // 2. 10-digit    e.g. "7698810804"   (legacy admin accounts)
+        // 3. Raw input   e.g. whatever the frontend sent
+        const digitsOnly = phone.replace(/\D/g, '');
+        const tenDigit   = digitsOnly.length === 12 ? digitsOnly.slice(2) : digitsOnly;
+        const candidates = [...new Set([phone, tenDigit, rawPhone.trim()])];
+
+        let user: any = null;
+        for (const candidate of candidates) {
+            const { data } = await supabase
+                .from('users')
+                .select('*')
+                .eq('phone', candidate)
+                .single();
+            if (data) { user = data; break; }
+        }
+
         if (!user) {
+            // New patient — create a minimal record
             user = { id: uuidv4(), phone, role: 'patient', tenant_id: null };
         }
+
         const token = generateToken(user);
         res.json({ token, user });
     } else {
@@ -226,7 +259,7 @@ router.get('/queue', optionalAuthenticateToken, async (req: any, res: any) => {
 });
 
 router.post('/queue', optionalAuthenticateToken, async (req: any, res) => {
-    const { id: clientProvidedId, patientName, phone, status, doctor, time, waitTime } = req.body;
+    const { id: clientProvidedId, patientName, phone, status, doctor, time, waitTime, clinicId } = req.body;
     
     const tenantId = req.body.tenantId || req.user?.tenant_id;
     if (!tenantId) return res.status(400).json({ error: 'tenantId is required to join a queue' });
@@ -272,7 +305,8 @@ router.post('/queue', optionalAuthenticateToken, async (req: any, res) => {
             doctor || 'the doctor',
             todayStr,
             time || '',
-            generatedToken
+            generatedToken,
+            clinicId || tenantId  // deep-link to clinic queue page
         ).catch(err => console.error('[WhatsApp] Booking confirmation failed:', err.message));
 
         res.status(201).json({ id, token: generatedToken, tenantId });

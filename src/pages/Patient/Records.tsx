@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { useQueue } from "@/lib/store";
+import { api } from "@/lib/api";
 
 export default function PatientRecords() {
   const navigate = useNavigate();
@@ -18,25 +19,31 @@ export default function PatientRecords() {
   // Filter queue items that are completed and match the phone number
   const records = queue.filter(q => q.status === 'completed' && q.phone === phone);
 
-  const handleSendOtp = (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (phone.trim().length >= 10) {
-      setIsSubmitting(true);
-      setTimeout(() => {
-        setIsSubmitting(false);
-        setStep("otp");
-      }, 800);
+    if (phone.trim().length < 10) return;
+    setIsSubmitting(true);
+    try {
+      await api.post("/auth/otp/send", { phone: phone.trim() });
+      setStep("otp");
+    } catch (err: any) {
+      console.error("OTP send failed:", err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleVerifyOtp = (e: React.FormEvent) => {
+  const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp.length === 4) {
-      setIsSubmitting(true);
-      setTimeout(() => {
-        setIsSubmitting(false);
-        setStep("records");
-      }, 1000);
+    if (otp.length !== 6) return;
+    setIsSubmitting(true);
+    try {
+      await api.post("/auth/otp/verify", { phone: phone.trim(), code: otp });
+      setStep("records");
+    } catch (err: any) {
+      console.error("OTP verify failed:", err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -79,16 +86,19 @@ export default function PatientRecords() {
             </div>
             <h2 className="text-3xl font-bold text-gray-900 mb-2">Enter Code</h2>
             <p className="text-gray-500 text-center mb-8 text-lg">
-              Sent to +91 {phone}
+              Check WhatsApp for your 6-digit code — sent to +91 {phone}
             </p>
             
             <Input 
               autoFocus
-              type="number"
-              placeholder="0000" 
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="000000" 
+              maxLength={6}
               value={otp} 
-              onChange={e => setOtp(e.target.value.slice(0, 4))}
-              className="h-16 w-48 text-center text-3xl tracking-[0.5em] rounded-xl font-mono bg-white border-gray-200 focus:border-black transition-colors"
+              onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              className="h-16 w-52 text-center text-3xl tracking-[0.5em] rounded-xl font-mono bg-white border-gray-200 focus:border-black transition-colors"
               required
             />
             
@@ -99,7 +109,7 @@ export default function PatientRecords() {
             <Button 
               type="submit" 
               className="w-full h-14 text-lg rounded-xl font-bold mt-8"
-              disabled={otp.length !== 4 || isSubmitting}
+              disabled={otp.length !== 6 || isSubmitting}
             >
               {isSubmitting ? "Verifying..." : "Verify & View Records"}
             </Button>

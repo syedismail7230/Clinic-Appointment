@@ -130,18 +130,21 @@ export default function ClinicLogin() {
                   <div className="w-12 h-12 bg-primary/5 rounded-full flex items-center justify-center mx-auto mb-2">
                     <ShieldCheck className="w-6 h-6 text-primary" />
                   </div>
-                  <p className="text-sm text-muted-foreground">Sent to {phone}</p>
+                  <p className="text-sm text-muted-foreground">Check WhatsApp for your 6-digit code — sent to {phone}</p>
                 </div>
                 <Input 
                   autoFocus
-                  type="number"
-                  placeholder="0000"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  placeholder="000000"
+                  maxLength={6}
                   value={otp}
-                  onChange={e => setOtp(e.target.value.slice(0, 4))}
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   className="h-16 text-center text-3xl tracking-[0.5em] rounded-2xl font-mono"
                   required
                 />
-                <Button className="w-full h-12 rounded-xl font-bold" type="submit" disabled={loading || otp.length < 4}>
+                <Button className="w-full h-12 rounded-xl font-bold" type="submit" disabled={loading || otp.length < 6}>
                   {loading ? "Verifying..." : "Verify & Sign In"}
                 </Button>
                 <button 

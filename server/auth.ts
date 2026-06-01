@@ -13,7 +13,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'quickcare-dev-secret-change-in-pro
 const OTPS = new Map<string, { code: string; expires: number }>();
 const OTP_RATE_LIMIT = new Map<string, { count: number, resetAt: number }>();
 
-const MAX_OTP_PER_HOUR = 5;
+const MAX_OTP_PER_HOUR = process.env.NODE_ENV === 'production' ? 5 : 20;
 
 export async function generateOTP(phone: string): Promise<void> {
     // Rate limiting: max 5 OTPs per phone per hour

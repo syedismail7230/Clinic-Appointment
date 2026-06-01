@@ -86,7 +86,8 @@ export default function BookingFlow() {
           time: state.slot,
           waitTime: "15 mins",
           prescription: "",
-          tenantId: clinic.tenant_id
+          tenantId: clinic.tenant_id,
+          clinicId: id  // sent to server for WhatsApp booking link
         });
 
         // Persist booking info to localStorage so confirmation page survives refresh
@@ -225,10 +226,13 @@ export default function BookingFlow() {
               
               <Input 
                 autoFocus
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 placeholder="000000" 
+                maxLength={6}
                 value={otp} 
-                onChange={e => setOtp(e.target.value.slice(0, 6))}
+                onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 className="h-16 w-52 text-center text-3xl tracking-[0.4em] rounded-xl font-mono bg-gray-50 border-transparent focus:border-black focus:bg-white transition-colors"
                 required
               />

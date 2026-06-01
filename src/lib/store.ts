@@ -24,6 +24,7 @@ export interface QueueItem {
   medicines?: PrescriptionItem[];
   tenantId?: string;
   date?: string;
+  clinicId?: string;  // used for WhatsApp booking confirmation deep-link
 }
 
 export const getQueue = async (tenantId?: string): Promise<QueueItem[]> => {

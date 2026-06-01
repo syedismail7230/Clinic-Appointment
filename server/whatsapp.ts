@@ -14,7 +14,7 @@ dotenv.config();
 
 const WHATSAPP_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
 const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
-const GRAPH_API_VERSION = 'v21.0';
+const GRAPH_API_VERSION = 'v25.0';
 const GRAPH_API_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -81,15 +81,24 @@ async function sendTemplate(
  * Send OTP verification code via WhatsApp.
  * Template: quickcare_otp (Authentication category)
  * Body: "Your QuickCare verification code is *{{1}}*. Valid for 5 minutes."
+ * Button: Copy-code URL button (index 0) — Meta adds this for Authentication templates.
  */
 export async function sendOTPWhatsApp(phone: string, code: string): Promise<void> {
     await sendTemplate(
         phone,
         'quickcare_otp',
-        'en',
+        'en_US',
         [
             {
                 type: 'body',
+                parameters: [{ type: 'text', text: code }],
+            },
+            {
+                // Authentication templates with a "Copy code" button require
+                // the OTP to also be passed as the button URL parameter.
+                type: 'button',
+                sub_type: 'url',
+                index: '0',
                 parameters: [{ type: 'text', text: code }],
             },
         ]
@@ -98,9 +107,14 @@ export async function sendOTPWhatsApp(phone: string, code: string): Promise<void
 
 /**
  * Send booking confirmation to a patient.
- * Template: quickcare_booking_confirmed (Utility category)
- * Body: "Hi {{1}}! Your appointment at *QuickCare* has been confirmed.
- *        👨‍⚕️ Doctor: {{2}}  📅 Date: {{3}}  ⏰ Time: {{4}}  🎫 Token: {{5}}"
+ * Template: appointment_confirmation_2 (Utility — APPROVED ✅)
+ *
+ * HEADER : "Your appointment is booked"
+ * BODY   : Hello {{1}},
+ *          Thank you for booking with {{2}}.
+ *          Your appointment on *{{3}}* at *{{4}}* is confirmed.
+ *          Your token number is *{{5}}*
+ *          Please arrive 10 minutes early. For help, reply to this message.
  */
 export async function sendBookingConfirmation(
     phone: string,
@@ -108,18 +122,19 @@ export async function sendBookingConfirmation(
     doctorName: string,
     date: string,
     time: string,
-    token: string
+    token: string,
+    clinicId: string
 ): Promise<void> {
     await sendTemplate(
         phone,
-        'quickcare_booking_confirmed',
-        'en',
+        'appointment_confirmation_2',
+        'en_US',
         [
             {
                 type: 'body',
                 parameters: [
                     { type: 'text', text: patientName },
-                    { type: 'text', text: doctorName || 'the doctor' },
+                    { type: 'text', text: doctorName || 'QuickCare' },
                     { type: 'text', text: date },
                     { type: 'text', text: time || 'your scheduled time' },
                     { type: 'text', text: token },
@@ -151,7 +166,7 @@ export async function sendQueueUpdate(
     await sendTemplate(
         phone,
         'quickcare_queue_update',
-        'en',
+        'en_US',
         [
             {
                 type: 'body',
