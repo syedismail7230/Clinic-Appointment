@@ -48,7 +48,7 @@ export default function TenantsView() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await api.post('/onboard', newTenantData);
+      await api.post('/admin/tenants', newTenantData);
       setIsAddingTenant(false);
       setNewTenantData({ name: "", email: "", phone: "" });
       fetchTenants();

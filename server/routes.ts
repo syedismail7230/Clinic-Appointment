@@ -546,6 +546,52 @@ router.delete('/admin/slots', authenticateToken, async (req: any, res) => {
 });
 
 // Root Admin
+// Admin: create a new tenant/clinic (root only — no payment required)
+router.post('/admin/tenants', authenticateToken, async (req: any, res) => {
+    if (req.user.role !== 'root') return res.status(403).json({ error: 'Root access required' });
+
+    const { name, email, phone } = req.body;
+    if (!name || !email || !phone) {
+        return res.status(400).json({ error: 'Name, email, and phone are required' });
+    }
+
+    const tenantId = uuidv4();
+    const userId   = uuidv4();
+    const clinicId = uuidv4();
+
+    try {
+        // Insert tenant
+        const { error: tenantErr } = await supabase.from('tenants').insert({
+            id: tenantId, name, email, phone,
+            status: 'active', plan: 'premium',
+            subscription_end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+        });
+        if (tenantErr) {
+            if (tenantErr.code === '23505') return res.status(409).json({ error: 'A clinic with this email already exists' });
+            throw tenantErr;
+        }
+
+        // Temp password — clinic admin resets via OTP login
+        const tempPassword = await hashPassword(`QuickCare@${Math.floor(1000 + Math.random() * 9000)}`);
+
+        // Insert admin user for this clinic
+        await supabase.from('users').insert({
+            id: userId, email, phone, role: 'admin',
+            tenant_id: tenantId, password_hash: tempPassword
+        });
+
+        // Create default clinic record
+        await supabase.from('clinics').insert({
+            id: clinicId, tenant_id: tenantId, name, address: 'Address pending'
+        });
+
+        res.status(201).json({ success: true, tenantId, clinicId });
+    } catch (error: any) {
+        console.error('[Admin] Tenant create error:', error.message);
+        res.status(400).json({ error: error.message });
+    }
+});
+
 router.get('/admin/tenants', authenticateToken, async (req: any, res) => {
     if (req.user.role !== 'root') return res.status(403).json({ error: 'Root access required' });
     const { data: tenants } = await supabase.from('tenants').select('*');
