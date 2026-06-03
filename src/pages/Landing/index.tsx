@@ -1,6 +1,7 @@
 import Hero from "./components/Hero";
 import ProblemSection from "./components/ProblemSection";
 import Features from "./components/Features";
+import SupportWidget from "./components/SupportWidget";
 import Pricing from "./components/Pricing";
 import FAQ from "./components/FAQ";
 import FinalCTA from "./components/FinalCTA";
@@ -14,6 +15,7 @@ export default function LandingPage() {
       <Pricing />
       <FAQ />
       <FinalCTA />
+      <SupportWidget />
     </div>
   );
 }

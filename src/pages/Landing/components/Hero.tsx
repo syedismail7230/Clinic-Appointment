@@ -9,9 +9,9 @@ export default function Hero() {
     <section className="relative min-h-screen flex flex-col overflow-hidden bg-[#070710]">
       {/* Animated background gradient blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-teal-500/20 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-500/15 rounded-full blur-[120px]" />
-        <div className="absolute top-[40%] left-[40%] w-[300px] h-[300px] bg-emerald-500/10 rounded-full blur-[80px]" />
+        <div className="absolute top-[-20%] left-[-10%] w-150 h-150 bg-teal-500/20 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-125 h-125 bg-indigo-500/15 rounded-full blur-[120px]" />
+        <div className="absolute top-[40%] left-[40%] w-75 h-75 bg-emerald-500/10 rounded-full blur-[80px]" />
         {/* Grid overlay */}
         <div
           className="absolute inset-0 opacity-[0.04]"
@@ -73,7 +73,7 @@ export default function Hero() {
           className="text-5xl md:text-7xl font-black text-white leading-[1.08] tracking-tight max-w-4xl"
         >
           Your Patients Deserve{" "}
-          <span className="bg-gradient-to-r from-teal-300 to-emerald-400 bg-clip-text text-transparent">
+          <span className="bg-linear-to-r from-teal-300 to-emerald-400 bg-clip-text text-transparent">
             Better Than
           </span>{" "}
           a Waiting Room.
