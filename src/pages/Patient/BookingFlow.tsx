@@ -87,7 +87,8 @@ export default function BookingFlow() {
           waitTime: "15 mins",
           prescription: "",
           tenantId: clinic.tenant_id,
-          clinicId: id  // sent to server for WhatsApp booking link
+          clinicId: id, // sent to server for WhatsApp booking link
+          date: state.date // pass selected date
         });
 
         // Persist booking info to localStorage so confirmation page survives refresh

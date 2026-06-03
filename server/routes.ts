@@ -15,6 +15,13 @@ function normalisePhone(raw: string): string {
     // Otherwise return as-is (handles other formats)
     return digits;
 }
+
+// Get YYYY-MM-DD date string in a specific timezone (defaults to IST)
+function getLocalDateString(timezone: string = 'Asia/Kolkata'): string {
+    const options = { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' } as const;
+    const dtf = new Intl.DateTimeFormat('en-CA', options);
+    return dtf.format(new Date());
+}
 import { generateOTP, verifyOTP, generateToken, authenticateToken, optionalAuthenticateToken, hashPassword, comparePassword } from './auth.js';
 import { notifyQueueUpdate } from './socket.js';
 import { sendBookingConfirmation, sendQueueUpdate, sendPrescription } from './whatsapp.js';
@@ -224,10 +231,10 @@ router.get('/clinics/:id', async (req, res) => {
     const { data: doctors } = await supabase.from('doctors').select('*').eq('clinic_id', clinic.id);
     const docs = doctors || [];
     
-    const today = new Date().toISOString().split('T')[0];
+    const targetDate = (req.query.date as string) || getLocalDateString('Asia/Kolkata');
     
     const resultDoctors = await Promise.all(docs.map(async (doc) => {
-        const { data: slots } = await supabase.from('slots').select('slot_time').eq('doctor_id', doc.id).or(`date.is.null,date.eq.${today}`);
+        const { data: slots } = await supabase.from('slots').select('slot_time').eq('doctor_id', doc.id).or(`date.is.null,date.eq.${targetDate}`);
         return { ...doc, availableSlots: (slots || []).map(s => s.slot_time).sort() };
     }));
     
@@ -237,29 +244,80 @@ router.get('/clinics/:id', async (req, res) => {
 // Queue (Public/Patient + Admin)
 router.get('/queue', optionalAuthenticateToken, async (req: any, res: any) => {
     let query = supabase.from('queue').select('*');
-    
+
+    const targetDate = (req.query.date as string) || getLocalDateString('Asia/Kolkata');
+
     if (req.user?.role === 'admin' && req.user?.tenant_id) {
-        query = query.eq('tenant_id', req.user.tenant_id);
+        // Live queue — target date. History is in the Appointments view.
+        query = query.eq('tenant_id', req.user.tenant_id).eq('date', targetDate);
     } else if (req.user?.role === 'patient' && req.user?.phone) {
+        // Patients see all their bookings (current + past) for their records page
         query = query.eq('phone', req.user.phone);
     } else if (req.query.tenantId) {
-        query = query.eq('tenant_id', req.query.tenantId);
+        // Public booking flow — target date for the specific clinic
+        query = query.eq('tenant_id', req.query.tenantId).eq('date', targetDate);
     } else {
         return res.status(400).json({ error: 'tenantId is required to query the queue' });
     }
-    
-    const { data: queue } = await query;
-    
-    const result = (queue || []).map(item => ({
-        ...item,
-        medicines: typeof item.medicines === 'string' ? JSON.parse(item.medicines) : item.medicines || []
-    }));
-    
+
+    const { data: queue } = await query.order('created_at', { ascending: false });
+    const raw = queue || [];
+
+    // ── Dynamic wait time calculation ─────────────────────────────────────────
+    // Average minutes a doctor spends per consultation
+    const AVG_MINS = 10;
+
+    // Helper: parse the numeric part of a token ("A-04" → 4)
+    const tokenNum = (token: string) => parseInt((token || '0').replace(/\D/g, ''), 10) || 0;
+
+    const result = raw.map(item => {
+        let waitTime = item.waitTime; // keep original if we can't compute
+
+        if (item.status === 'completed') {
+            waitTime = 'Done';
+        } else if (item.status === 'in-consultation') {
+            waitTime = 'With doctor now';
+        } else {
+            // Count active patients with the SAME doctor and a LOWER token
+            // (they are physically ahead in the line)
+            const patientsAhead = raw.filter(other =>
+                other.id !== item.id &&
+                other.doctor === item.doctor &&
+                ['booked', 'waiting', 'in-consultation'].includes(other.status) &&
+                tokenNum(other.token) < tokenNum(item.token)
+            ).length;
+
+            // +1 slot if someone from this doctor is currently in consultation
+            // (they're occupying the room right now)
+            const inConsultNow = raw.some(other =>
+                other.doctor === item.doctor &&
+                other.status === 'in-consultation'
+            );
+
+            const totalSlots = patientsAhead + (inConsultNow ? 1 : 0);
+            const mins = totalSlots * AVG_MINS;
+
+            waitTime = mins === 0
+                ? 'Next up'
+                : mins < 60
+                    ? `~${mins} min wait`
+                    : `~${Math.round(mins / 60 * 10) / 10} hr wait`;
+        }
+
+        return {
+            ...item,
+            waitTime,
+            medicines: typeof item.medicines === 'string'
+                ? JSON.parse(item.medicines)
+                : item.medicines || []
+        };
+    });
+
     res.json(result);
 });
 
 router.post('/queue', optionalAuthenticateToken, async (req: any, res) => {
-    const { id: clientProvidedId, patientName, phone, status, doctor, time, waitTime, clinicId } = req.body;
+    const { id: clientProvidedId, patientName, phone, status, doctor, time, waitTime, clinicId, date } = req.body;
     
     const tenantId = req.body.tenantId || req.user?.tenant_id;
     if (!tenantId) return res.status(400).json({ error: 'tenantId is required to join a queue' });
@@ -267,18 +325,49 @@ router.post('/queue', optionalAuthenticateToken, async (req: any, res) => {
     if (!phone) return res.status(400).json({ error: 'phone is required' });
     
     const id = clientProvidedId || uuidv4();
-    const todayStr = new Date().toISOString().split('T')[0];
+    const targetDate = date || getLocalDateString('Asia/Kolkata');
 
-    // Generate token
-    const { count } = await supabase.from('queue').select('*', { count: 'exact', head: true })
-        .eq('tenant_id', tenantId).eq('date', todayStr);
-    
-    const generatedToken = `A-${((count || 0) + 1).toString().padStart(2, '0')}`;
-    
+    // ── Token generation ──────────────────────────────────────────────────────
+    // Tokens are per-doctor per-day: Dr. Sarvanan → A-01, A-02…
+    //                                Dr. Hanin    → A-01, A-02…  (independent)
+    // We find the highest existing token number for this doctor today and +1.
+    // Using MAX avoids the race-condition that COUNT has when multiple patients
+    // book simultaneously (COUNT reads stale, everyone gets the same number).
+    let generatedToken = 'A-01';
+    if (doctor) {
+        const { data: existing } = await supabase
+            .from('queue')
+            .select('token')
+            .eq('tenant_id', tenantId)
+            .eq('date', targetDate)
+            .eq('doctor', doctor)
+            .order('token', { ascending: false })
+            .limit(1);
+
+        if (existing && existing.length > 0) {
+            // Parse the numeric part of the last token e.g. "A-07" → 7
+            const lastNum = parseInt((existing[0].token || 'A-00').replace(/\D/g, ''), 10) || 0;
+            generatedToken = `A-${(lastNum + 1).toString().padStart(2, '0')}`;
+        }
+    } else {
+        // No doctor assigned — fall back to global daily count
+        const { count } = await supabase
+            .from('queue')
+            .select('*', { count: 'exact', head: true })
+            .eq('tenant_id', tenantId)
+            .eq('date', targetDate);
+        generatedToken = `A-${((count || 0) + 1).toString().padStart(2, '0')}`;
+    }
+
     try {
         await supabase.from('queue').insert({
             id, tenant_id: tenantId, patientName, phone, status: status || 'booked',
-            doctor, date: todayStr, time, waitTime, token: generatedToken, medicines: []
+            doctor, date: targetDate, time, waitTime, token: generatedToken, medicines: []
+        });
+
+        await supabase.from('appointments').insert({
+            id, tenant_id: tenantId, patientName, phone, date: targetDate, time, doctor,
+            status: status || 'booked', notes: '', tags: [], prescription: '', medicines: []
         });
         
         // Upsert patient
@@ -303,7 +392,7 @@ router.post('/queue', optionalAuthenticateToken, async (req: any, res) => {
             phone,
             patientName,
             doctor || 'the doctor',
-            todayStr,
+            targetDate,
             time || '',
             generatedToken,
             clinicId || tenantId  // deep-link to clinic queue page
@@ -332,6 +421,57 @@ router.patch('/queue/:id', authenticateToken, async (req: any, res) => {
     
     if (item?.tenant_id) notifyQueueUpdate(item.tenant_id);
 
+    // Sync to appointments table
+    if (item) {
+        const aptUpdates: any = {};
+        if (status) aptUpdates.status = status;
+        if (prescription !== undefined) {
+            aptUpdates.prescription = prescription;
+            aptUpdates.notes = prescription;
+        }
+        if (medicines) aptUpdates.medicines = medicines;
+
+        if (Object.keys(aptUpdates).length > 0) {
+            const { data: updatedApt } = await supabase
+                .from('appointments')
+                .update(aptUpdates)
+                .eq('id', req.params.id)
+                .select();
+
+            if (!updatedApt || updatedApt.length === 0) {
+                // If it doesn't exist by ID (legacy record), try matching by tenant/phone/date/doctor
+                const { data: existingApt } = await supabase
+                    .from('appointments')
+                    .select('id')
+                    .eq('tenant_id', item.tenant_id)
+                    .eq('phone', item.phone)
+                    .eq('date', item.date)
+                    .eq('doctor', item.doctor)
+                    .limit(1);
+
+                if (existingApt && existingApt.length > 0) {
+                    await supabase.from('appointments').update(aptUpdates).eq('id', existingApt[0].id);
+                } else if (status === 'completed') {
+                    // Create a new synced appointment
+                    await supabase.from('appointments').insert({
+                        id: item.id,
+                        tenant_id: item.tenant_id,
+                        patientName: item.patientName,
+                        phone: item.phone,
+                        date: item.date,
+                        time: item.time,
+                        doctor: item.doctor,
+                        status: item.status,
+                        notes: prescription || '',
+                        tags: [],
+                        prescription: prescription || '',
+                        medicines: medicines || []
+                    });
+                }
+            }
+        }
+    }
+
     // WhatsApp queue status notification (fire-and-forget)
     if (status && item) {
         sendQueueUpdate(
@@ -354,31 +494,6 @@ router.patch('/queue/:id', authenticateToken, async (req: any, res) => {
         ).catch(err => console.error('[WhatsApp] Prescription send failed:', err.message));
     }
 
-    // Sync appointment
-    if (status === 'completed' && item) {
-        try {
-            const { data: existingApt } = await supabase.from('appointments').select('id').eq('tenant_id', item.tenant_id).eq('phone', item.phone).eq('date', item.date).eq('doctor', item.doctor).single();
-            
-            if (existingApt) {
-                await supabase.from('appointments').update({
-                    status: 'completed',
-                    notes: prescription || '',
-                    prescription: prescription || '',
-                    medicines: medicines || item.medicines || []
-                }).eq('id', existingApt.id);
-            } else {
-                await supabase.from('appointments').insert({
-                    id: uuidv4(), tenant_id: item.tenant_id, patientName: item.patientName, phone: item.phone,
-                    date: item.date, time: item.time, doctor: item.doctor, status: 'completed',
-                    notes: prescription || '', tags: [], prescription: prescription || '',
-                    medicines: medicines || item.medicines || []
-                });
-            }
-        } catch (err: any) {
-            console.error('[Appointment Sync] Error:', err.message);
-        }
-    }
-
     res.json({ success: true });
 });
 
@@ -399,11 +514,45 @@ router.post('/appointments', authenticateToken, async (req: any, res) => {
     if (!patientName || !phone) return res.status(400).json({ error: 'patientName and phone are required' });
     
     const id = uuidv4();
+    
+    // Generate token
+    let generatedToken = 'A-01';
+    if (doctor) {
+        const { data: existing } = await supabase
+            .from('queue')
+            .select('token')
+            .eq('tenant_id', tenantId)
+            .eq('date', date)
+            .eq('doctor', doctor)
+            .order('token', { ascending: false })
+            .limit(1);
+
+        if (existing && existing.length > 0) {
+            const lastNum = parseInt((existing[0].token || 'A-00').replace(/\D/g, ''), 10) || 0;
+            generatedToken = `A-${(lastNum + 1).toString().padStart(2, '0')}`;
+        }
+    } else {
+        const { count } = await supabase
+            .from('queue')
+            .select('*', { count: 'exact', head: true })
+            .eq('tenant_id', tenantId)
+            .eq('date', date);
+        generatedToken = `A-${((count || 0) + 1).toString().padStart(2, '0')}`;
+    }
+
     try {
         await supabase.from('appointments').insert({
             id, tenant_id: tenantId, patientName, phone, date, time, doctor,
             status: status || 'booked', notes: notes || '', tags: tags || []
         });
+
+        await supabase.from('queue').insert({
+            id, tenant_id: tenantId, patientName, phone, status: status || 'booked',
+            doctor, date, time, waitTime: '15 mins', token: generatedToken, medicines: []
+        });
+
+        notifyQueueUpdate(tenantId);
+
         res.status(201).json({ id, success: true });
     } catch (error: any) {
         res.status(500).json({ error: 'Failed to create appointment' });
@@ -425,6 +574,20 @@ router.patch('/appointments/:id', authenticateToken, async (req: any, res) => {
     if (tenantId) query = query.eq('tenant_id', tenantId);
     
     await query;
+
+    // Sync to queue table
+    const queueUpdates: any = {};
+    if (status) queueUpdates.status = status;
+    if (notes !== undefined) queueUpdates.prescription = notes; // queue maps notes to prescription
+
+    if (Object.keys(queueUpdates).length > 0) {
+        let qQuery = supabase.from('queue').update(queueUpdates).eq('id', req.params.id);
+        if (tenantId) qQuery = qQuery.eq('tenant_id', tenantId);
+        await qQuery;
+        
+        if (tenantId) notifyQueueUpdate(tenantId);
+    }
+    
     res.json({ success: true });
 });
 

@@ -27,8 +27,12 @@ export interface QueueItem {
   clinicId?: string;  // used for WhatsApp booking confirmation deep-link
 }
 
-export const getQueue = async (tenantId?: string): Promise<QueueItem[]> => {
-  const url = tenantId ? `/queue?tenantId=${tenantId}` : '/queue';
+export const getQueue = async (tenantId?: string, date?: string): Promise<QueueItem[]> => {
+  const params = new URLSearchParams();
+  if (tenantId) params.append('tenantId', tenantId);
+  if (date) params.append('date', date);
+  const queryString = params.toString();
+  const url = queryString ? `/queue?${queryString}` : '/queue';
   return api.get(url);
 };
 
@@ -42,13 +46,13 @@ export const addQueueItem = async (item: QueueItem) => {
   window.dispatchEvent(new Event('queue_updated'));
 };
 
-export const useQueue = (tenantId?: string) => {
+export const useQueue = (tenantId?: string, date?: string) => {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchQueue = async () => {
     try {
-      const data = await getQueue(tenantId);
+      const data = await getQueue(tenantId, date);
       setQueue(data);
     } catch (error) {
       console.error('Failed to fetch queue:', error);
@@ -70,7 +74,7 @@ export const useQueue = (tenantId?: string) => {
       socket.off('global-queue-update', fetchQueue);
       window.removeEventListener('queue_updated', fetchQueue);
     };
-  }, []);
+  }, [tenantId, date]);
 
   return queue;
 };

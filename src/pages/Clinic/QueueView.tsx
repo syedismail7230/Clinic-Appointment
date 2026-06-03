@@ -12,7 +12,16 @@ type SortField = 'time' | 'token';
 type SortDirection = 'asc' | 'desc';
 
 export default function QueueView() {
-  const queue = useQueue();
+  const getLocalDateStringStr = (date: Date = new Date()) => {
+    return new Intl.DateTimeFormat('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(date);
+  };
+
+  const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateStringStr());
+  const queue = useQueue(undefined, selectedDate);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [viewingPatient, setViewingPatient] = useState<any>(null);
   const [prescription, setPrescription] = useState("");
@@ -132,7 +141,8 @@ export default function QueueView() {
       time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
       waitTime: '10 mins',
       prescription: '',
-      medicines: []
+      medicines: [],
+      date: getLocalDateStringStr() // Always register walk-in for the current local today
     });
     setIsWalkInModalOpen(false);
     setWalkInForm({ name: '', phone: '', doctor: '' });
@@ -159,7 +169,9 @@ export default function QueueView() {
     <div className="animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Today's Queue</h2>
+          <h2 className="text-2xl font-bold text-gray-900">
+            {selectedDate === getLocalDateStringStr() ? "Today's Queue" : `Queue for ${selectedDate}`}
+          </h2>
           <p className="text-gray-500">Manage patient flow and wait times.</p>
         </div>
         
@@ -222,6 +234,12 @@ export default function QueueView() {
 
       {/* Filters Row */}
       <div className="flex flex-wrap gap-3 mb-4">
+        <input
+          type="date"
+          className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+          value={selectedDate}
+          onChange={e => setSelectedDate(e.target.value)}
+        />
         <select
           className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
           value={statusFilter}
@@ -279,7 +297,9 @@ export default function QueueView() {
                   <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                     {searchTerm || statusFilter !== 'all' || doctorFilter !== 'all' 
                       ? 'No patients match your filters.' 
-                      : 'No patients in queue today.'}
+                      : selectedDate === getLocalDateStringStr() 
+                        ? 'No patients in queue today.' 
+                        : 'No patients in queue for this date.'}
                   </td>
                 </tr>
               ) : sortedQueue.map((item) => (

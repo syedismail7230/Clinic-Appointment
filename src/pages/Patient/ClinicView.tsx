@@ -18,10 +18,11 @@ export default function ClinicView() {
   useEffect(() => {
     const fetchClinic = async () => {
       try {
-        const data = await api.get(`/clinics/${id}`);
+        const dateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
+        const data = await api.get(`/clinics/${id}?date=${dateStr}`);
         setClinic(data);
         if (data.doctors && data.doctors.length > 0) {
-          setSelectedDoctor(data.doctors[0].id);
+          setSelectedDoctor(d => d || data.doctors[0].id);
         }
       } catch (error) {
         console.error('Failed to fetch clinic:', error);
@@ -30,7 +31,7 @@ export default function ClinicView() {
       }
     };
     fetchClinic();
-  }, [id]);
+  }, [id, selectedDate]);
 
   if (loading) return <div className="p-6 text-center">Loading...</div>;
   if (!clinic) return <div className="p-6 text-center">Clinic not found</div>;
