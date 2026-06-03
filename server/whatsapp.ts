@@ -145,6 +145,65 @@ export async function sendBookingConfirmation(
 }
 
 /**
+ * Send prescription / consultation summary to a patient.
+ * Template: quickcare_prescription (Utility — must be APPROVED)
+ *
+ * BODY:
+ *   Hi {{1}}, your consultation with {{2}} is complete. 🏥
+ *   📋 Doctor's Notes: {{3}}
+ *   💊 Prescribed Medicines: {{4}}
+ */
+export async function sendPrescription(
+    phone: string,
+    patientName: string,
+    doctorName: string,
+    notes: string,
+    medicines: Array<{
+        medicineName: string;
+        dosage?: string;
+        time?: string;
+        frequency?: string;
+        duration?: string;
+    }>
+): Promise<void> {
+    // Format medicines as a readable numbered list
+    const medicineText = medicines.length > 0
+        ? medicines
+            .map((m, i) => {
+                // e.g. "1) Paracetamol 500mg — After Food, 1-0-1, for 3 Days"
+                const detail = [
+                    m.dosage                         || null,
+                    m.time                           || null,
+                    m.frequency                      || null,
+                    m.duration ? `for ${m.duration}` : null,
+                ].filter(Boolean).join(', ');
+                return `${i + 1}) ${m.medicineName}${detail ? ` — ${detail}` : ''}`;
+            })
+            .join(' • ')
+        : 'No medicines prescribed.';
+
+    const notesText = notes?.trim() || 'No additional notes.';
+
+    await sendTemplate(
+        phone,
+        'service_disruption',
+        'en_US',
+        [
+            {
+                type: 'body',
+                parameters: [
+                    { type: 'text', text: patientName },
+                    { type: 'text', text: doctorName || 'the doctor' },
+                    { type: 'text', text: notesText },
+                    { type: 'text', text: medicineText },
+                ],
+            },
+        ]
+    );
+}
+
+
+/**
  * Send queue status update to a patient.
  * Template: quickcare_queue_update (Utility category)
  * Body: "Hi {{1}}! Your queue status at QuickCare has been updated.

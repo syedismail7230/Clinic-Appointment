@@ -17,7 +17,7 @@ function normalisePhone(raw: string): string {
 }
 import { generateOTP, verifyOTP, generateToken, authenticateToken, optionalAuthenticateToken, hashPassword, comparePassword } from './auth.js';
 import { notifyQueueUpdate } from './socket.js';
-import { sendBookingConfirmation, sendQueueUpdate } from './whatsapp.js';
+import { sendBookingConfirmation, sendQueueUpdate, sendPrescription } from './whatsapp.js';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 
@@ -340,6 +340,18 @@ router.patch('/queue/:id', authenticateToken, async (req: any, res) => {
             item.token,
             status
         ).catch(err => console.error('[WhatsApp] Queue update notification failed:', err.message));
+    }
+
+    // WhatsApp prescription delivery on consultation complete
+    if (status === 'completed' && item && (prescription || (medicines && medicines.length > 0))) {
+        const parsedMedicines = typeof medicines === 'string' ? JSON.parse(medicines) : (medicines || []);
+        sendPrescription(
+            item.phone,
+            item.patientName,
+            item.doctor,
+            prescription || '',
+            parsedMedicines
+        ).catch(err => console.error('[WhatsApp] Prescription send failed:', err.message));
     }
 
     // Sync appointment
