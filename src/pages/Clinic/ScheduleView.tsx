@@ -1,54 +1,45 @@
 import { useState, useEffect } from "react";
-import { Calendar as CalendarIcon, Clock, Plus, Trash2, UserPlus, X } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Clock, Plus, Trash2, UserPlus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { api } from "@/lib/api";
 
+function initials(name: string) {
+  return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+}
+
 export default function ScheduleView() {
   const [clinicDoctors, setClinicDoctors] = useState<any[]>([]);
   const [selectedDoctor, setSelectedDoctor] = useState("");
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [loading, setLoading] = useState(true);
-  
-  const [availability, setAvailability] = useState<Record<string, string[]>>({});
-  const [newTime, setNewTime] = useState("");
-
-  // Doctor management
+  const [selectedDate, setSelectedDate]   = useState(new Date().toISOString().split("T")[0]);
+  const [loading, setLoading]             = useState(true);
+  const [availability, setAvailability]   = useState<Record<string, string[]>>({});
+  const [newTime, setNewTime]             = useState("");
   const [isAddDoctorOpen, setIsAddDoctorOpen] = useState(false);
-  const [newDoctor, setNewDoctor] = useState({ name: '', specialty: '' });
-  const [addingDoctor, setAddingDoctor] = useState(false);
+  const [newDoctor, setNewDoctor]         = useState({ name: "", specialty: "" });
+  const [addingDoctor, setAddingDoctor]   = useState(false);
 
   const fetchDoctors = async () => {
     try {
-      const doctors = await api.get('/admin/doctors');
+      const doctors = await api.get("/admin/doctors");
       setClinicDoctors(doctors);
-      if (doctors.length > 0 && !selectedDoctor) {
-        setSelectedDoctor(doctors[0].id);
-      }
-    } catch (error) {
-      console.error('Failed to fetch doctors:', error);
-    }
+      if (doctors.length > 0 && !selectedDoctor) setSelectedDoctor(doctors[0].id);
+    } catch (err) { console.error(err); }
   };
 
   const fetchSlots = async () => {
     try {
-      const slots = await api.get('/admin/slots');
+      const slots = await api.get("/admin/slots");
       const grouped: Record<string, string[]> = {};
       for (const slot of slots) {
-        const dateKey = slot.date || 'recurring';
+        const dateKey = slot.date || "recurring";
         const key = `${slot.doctor_id}_${dateKey}`;
         if (!grouped[key]) grouped[key] = [];
         if (!grouped[key].includes(slot.slot_time)) grouped[key].push(slot.slot_time);
       }
-      Object.keys(grouped).forEach(k => {
-        grouped[k].sort();
-      });
+      Object.keys(grouped).forEach(k => { grouped[k].sort(); });
       setAvailability(grouped);
-    } catch (error) {
-      console.error('Failed to fetch slots:', error);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const fetchAll = async () => {
@@ -57,251 +48,218 @@ export default function ScheduleView() {
     setLoading(false);
   };
 
-  useEffect(() => {
-    fetchAll();
-  }, []);
+  useEffect(() => { fetchAll(); }, []);
 
-  // Show date-specific slots, falling back to recurring slots
-  const dateKey = `${selectedDoctor}_${selectedDate}`;
+  const dateKey     = `${selectedDoctor}_${selectedDate}`;
   const recurringKey = `${selectedDoctor}_recurring`;
   const currentSlots = availability[dateKey] || availability[recurringKey] || [];
 
   const handleAddSlot = async () => {
     if (!newTime || !selectedDoctor) return;
-    
-    const [hours, minutes] = newTime.split(':');
-    const hour = parseInt(hours, 10);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const formattedHour = hour % 12 || 12;
-    const formattedTime = `${formattedHour.toString().padStart(2, '0')}:${minutes} ${ampm}`;
-
-    if (!currentSlots.includes(formattedTime)) {
+    const [h, m] = newTime.split(":");
+    const hour   = parseInt(h, 10);
+    const ampm   = hour >= 12 ? "PM" : "AM";
+    const fmtH   = (hour % 12 || 12).toString().padStart(2, "0");
+    const formatted = `${fmtH}:${m} ${ampm}`;
+    if (!currentSlots.includes(formatted)) {
       try {
-        await api.post('/admin/slots', {
-          doctor_id: selectedDoctor,
-          slot_time: formattedTime,
-          date: selectedDate
-        });
-        
-        setAvailability(prev => ({
-          ...prev,
-          [dateKey]: [...(prev[dateKey] || []), formattedTime].sort()
-        }));
-      } catch (error) {
-        console.error('Failed to add slot:', error);
-      }
+        await api.post("/admin/slots", { doctor_id: selectedDoctor, slot_time: formatted, date: selectedDate });
+        setAvailability(prev => ({ ...prev, [dateKey]: [...(prev[dateKey] || []), formatted].sort() }));
+      } catch (err) { console.error(err); }
     }
     setNewTime("");
   };
 
-  const handleRemoveSlot = async (timeToRemove: string) => {
+  const handleRemoveSlot = async (t: string) => {
     try {
-      await api.delete('/admin/slots', {
-        doctor_id: selectedDoctor,
-        slot_time: timeToRemove,
-        date: selectedDate
-      });
-      
-      setAvailability(prev => ({
-        ...prev,
-        [dateKey]: (prev[dateKey] || []).filter(t => t !== timeToRemove)
-      }));
-    } catch (error) {
-      console.error('Failed to remove slot:', error);
-    }
+      await api.delete("/admin/slots", { doctor_id: selectedDoctor, slot_time: t, date: selectedDate });
+      setAvailability(prev => ({ ...prev, [dateKey]: (prev[dateKey] || []).filter(s => s !== t) }));
+    } catch (err) { console.error(err); }
   };
 
   const handleAddDoctor = async () => {
     if (!newDoctor.name) return;
     setAddingDoctor(true);
     try {
-      await api.post('/admin/doctors', {
-        name: newDoctor.name,
-        specialty: newDoctor.specialty
-      });
+      await api.post("/admin/doctors", newDoctor);
       await fetchDoctors();
       setIsAddDoctorOpen(false);
-      setNewDoctor({ name: '', specialty: '' });
-    } catch (error) {
-      console.error('Failed to add doctor:', error);
-    } finally {
-      setAddingDoctor(false);
-    }
+      setNewDoctor({ name: "", specialty: "" });
+    } catch (err) { console.error(err); } finally { setAddingDoctor(false); }
   };
 
-  const handleRemoveDoctor = async (doctorId: string) => {
-    if (!confirm('Are you sure? This will also delete all their slots.')) return;
+  const handleRemoveDoctor = async (id: string) => {
+    if (!confirm("Remove this doctor and all their slots?")) return;
     try {
-      await api.delete(`/admin/doctors/${doctorId}`);
-      if (selectedDoctor === doctorId) {
-        setSelectedDoctor('');
-      }
+      await api.delete(`/admin/doctors/${id}`);
+      if (selectedDoctor === id) setSelectedDoctor("");
       await fetchDoctors();
       await fetchSlots();
-    } catch (error) {
-      console.error('Failed to remove doctor:', error);
-    }
+    } catch (err) { console.error(err); }
   };
 
-
   return (
-    <div className="animate-in fade-in duration-300 max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900">Doctor Availability</h2>
-        <p className="text-gray-500">Manage doctors, schedules, and appointment slots.</p>
+    <div className="animate-in fade-in duration-300 space-y-6">
+      {/* ── Header ── */}
+      <div>
+        <h2 className="text-[22px] font-bold tracking-tight text-[#0a0a0a]">Schedule</h2>
+        <p className="text-[13px] text-[#999] mt-0.5">Manage doctors and available appointment slots</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Controls */}
-        <Card className="md:col-span-1 h-fit">
-          <CardHeader>
-            <CardTitle className="text-lg">Select Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-sm font-medium text-gray-700">Doctor</label>
-                <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => setIsAddDoctorOpen(true)}>
-                  <UserPlus className="w-3 h-3 mr-1" /> Add
-                </Button>
-              </div>
-              {clinicDoctors.length > 0 ? (
-                <div className="space-y-2">
-                  {clinicDoctors.map(doc => (
-                    <div 
-                      key={doc.id} 
-                      className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition-all ${selectedDoctor === doc.id ? 'border-black bg-gray-50' : 'border-gray-200 hover:border-gray-300'}`}
-                      onClick={() => setSelectedDoctor(doc.id)}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-900 truncate">{doc.name}</div>
-                        <div className="text-xs text-gray-500">{doc.specialty || 'General'}</div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* ── Left: doctors + date ── */}
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-[#e5e5e5] overflow-hidden">
+            <div className="px-4 py-3 border-b border-[#f0f0f0] flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-[#aaa]">Doctors</span>
+              <button
+                onClick={() => setIsAddDoctorOpen(true)}
+                className="flex items-center gap-1 text-[11px] font-semibold text-[#555] hover:text-black transition-colors"
+              >
+                <UserPlus className="w-3 h-3" /> Add
+              </button>
+            </div>
+            {clinicDoctors.length === 0 ? (
+              <div className="px-4 py-8 text-center text-[12px] text-[#bbb]">No doctors yet. Add one to get started.</div>
+            ) : (
+              <div className="divide-y divide-[#f8f8f8]">
+                {clinicDoctors.map(doc => (
+                  <button
+                    key={doc.id}
+                    onClick={() => setSelectedDoctor(doc.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors group ${selectedDoctor === doc.id ? "bg-[#f8f8f8]" : "hover:bg-[#fafafa]"}`}
+                  >
+                    {/* avatar with active indicator */}
+                    <div className="relative">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold ${selectedDoctor === doc.id ? "bg-black text-white" : "bg-[#f0f0f0] text-[#555]"}`}>
+                        {initials(doc.name)}
                       </div>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleRemoveDoctor(doc.id); }}
-                        className="ml-2 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors shrink-0"
-                        title="Remove doctor"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-4 border border-dashed rounded-lg text-sm text-gray-500">
-                  No doctors yet. Add one to get started.
-                </div>
-              )}
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-              <div className="relative">
-                <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                <Input 
-                  type="date" 
-                  className="pl-9"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                />
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-[13px] font-semibold truncate ${selectedDoctor === doc.id ? "text-[#0a0a0a]" : "text-[#444]"}`}>
+                        {doc.name}
+                      </div>
+                      <div className="text-[11px] text-[#aaa]">{doc.specialty || "General"}</div>
+                    </div>
+                    <button
+                      onClick={e => { e.stopPropagation(); handleRemoveDoctor(doc.id); }}
+                      className="opacity-0 group-hover:opacity-100 text-[#ccc] hover:text-red-500 p-1 rounded transition-all"
+                      title="Remove doctor"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </button>
+                ))}
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            )}
+          </div>
 
-        {/* Time Slots */}
-        <Card className="md:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg">Available Slots</CardTitle>
-            <div className="text-sm font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full border border-green-200">Live Synced</div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col sm:flex-row gap-2 mb-6">
-              <Input 
-                type="time" 
-                className="w-full sm:w-40"
+          {/* Date picker */}
+          <div className="bg-white rounded-xl border border-[#e5e5e5] px-4 py-3">
+            <label className="block text-[11px] font-semibold uppercase tracking-widest text-[#aaa] mb-2">Date</label>
+            <input
+              type="date"
+              className="w-full h-9 rounded-lg border border-[#e5e5e5] bg-[#fafafa] px-3 text-sm text-[#333] focus:outline-none focus:ring-1 focus:ring-black"
+              value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* ── Right: slots ── */}
+        <div className="md:col-span-2 bg-white rounded-xl border border-[#e5e5e5] overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-[#f0f0f0] flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-[#aaa]">Available Slots</span>
+            <span className="text-[10px] font-semibold text-[#aaa] bg-[#f5f5f5] border border-[#ebebeb] px-2 py-0.5 rounded">Live Synced</span>
+          </div>
+
+          <div className="p-5">
+            {/* Add slot row */}
+            <div className="flex gap-2 mb-5">
+              <input
+                type="time"
+                className="h-9 flex-1 max-w-[140px] rounded-lg border border-[#e5e5e5] bg-white px-3 text-sm text-[#333] focus:outline-none focus:ring-1 focus:ring-black disabled:opacity-40 disabled:cursor-not-allowed"
                 value={newTime}
-                onChange={(e) => setNewTime(e.target.value)}
+                onChange={e => setNewTime(e.target.value)}
                 disabled={!selectedDoctor}
               />
-              <Button onClick={handleAddSlot} variant="secondary" className="w-full sm:w-auto" disabled={!selectedDoctor || !newTime}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Slot
-              </Button>
+              <button
+                onClick={handleAddSlot}
+                disabled={!selectedDoctor || !newTime}
+                className="h-9 px-4 rounded-lg bg-black text-white text-[12px] font-semibold flex items-center gap-1.5 hover:bg-[#222] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Slot
+              </button>
             </div>
 
+            {/* Slot grid */}
             {!selectedDoctor ? (
-              <div className="text-center py-12 border-2 border-dashed rounded-xl border-gray-200 bg-gray-50">
-                <Clock className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-                <h3 className="text-sm font-medium text-gray-900">Select a doctor</h3>
-                <p className="text-sm text-gray-500 mt-1">Choose a doctor from the left panel to manage their slots.</p>
+              <div className="text-center py-14 border-2 border-dashed border-[#ebebeb] rounded-xl">
+                <Clock className="w-7 h-7 text-[#e0e0e0] mx-auto mb-2" />
+                <p className="text-[12px] text-[#bbb]">Select a doctor to manage their slots.</p>
               </div>
             ) : currentSlots.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="flex flex-wrap gap-2">
                 {currentSlots.map(slot => (
-                  <div key={slot} className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
-                    <div className="flex items-center text-sm font-medium">
-                      <Clock className="w-4 h-4 mr-2 text-gray-500" />
-                      {slot}
-                    </div>
-                    <button 
+                  <div
+                    key={slot}
+                    className="flex items-center gap-2 bg-[#f5f5f5] border border-[#ebebeb] rounded-lg px-3 py-2 group hover:border-[#d0d0d0] transition-colors"
+                  >
+                    <Clock className="w-3.5 h-3.5 text-[#aaa]" />
+                    <span className="text-[13px] font-semibold text-[#333]">{slot}</span>
+                    <button
                       onClick={() => handleRemoveSlot(slot)}
-                      className="text-red-500 hover:text-red-700 p-1 rounded-md hover:bg-red-50 transition-colors"
+                      className="text-[#ccc] hover:text-red-500 transition-colors ml-0.5"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <X className="w-3 h-3" />
                     </button>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-12 border-2 border-dashed rounded-xl border-gray-200 bg-gray-50">
-                <Clock className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-                <h3 className="text-sm font-medium text-gray-900">No slots configured</h3>
-                <p className="text-sm text-gray-500 mt-1">Add time slots for this date to allow bookings.</p>
+              <div className="text-center py-14 border-2 border-dashed border-[#ebebeb] rounded-xl">
+                <Clock className="w-7 h-7 text-[#e0e0e0] mx-auto mb-2" />
+                <p className="text-[13px] font-medium text-[#bbb]">No slots configured</p>
+                <p className="text-[12px] text-[#ccc] mt-1">Add a time slot above to allow patient bookings.</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
-      {/* Add Doctor Modal */}
+      {/* ── Add Doctor modal ── */}
       <Modal isOpen={isAddDoctorOpen} onClose={() => setIsAddDoctorOpen(false)} title="Add Doctor">
-        <div className="space-y-4 max-w-md w-full">
+        <div className="space-y-4 max-w-sm w-full">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Doctor Name</label>
-            <Input 
+            <label className="block text-[11px] font-semibold uppercase tracking-widest text-[#aaa] mb-1.5">Doctor Name</label>
+            <Input
               placeholder="e.g. Dr. Sarah Wilson"
               value={newDoctor.name}
-              onChange={e => setNewDoctor({...newDoctor, name: e.target.value})}
+              onChange={e => setNewDoctor({ ...newDoctor, name: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Specialty</label>
+            <label className="block text-[11px] font-semibold uppercase tracking-widest text-[#aaa] mb-1.5">Specialty</label>
             <select
-              className="w-full h-10 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+              className="w-full h-10 rounded-lg border border-[#e5e5e5] bg-white px-3 text-sm text-[#333] focus:outline-none focus:ring-1 focus:ring-black"
               value={newDoctor.specialty}
-              onChange={e => setNewDoctor({...newDoctor, specialty: e.target.value})}
+              onChange={e => setNewDoctor({ ...newDoctor, specialty: e.target.value })}
             >
-              <option value="">Select specialty...</option>
-              <option value="General Physician">General Physician</option>
-              <option value="Cardiologist">Cardiologist</option>
-              <option value="Dermatologist">Dermatologist</option>
-              <option value="Pediatrician">Pediatrician</option>
-              <option value="Orthopedic">Orthopedic</option>
-              <option value="Neurologist">Neurologist</option>
-              <option value="ENT Specialist">ENT Specialist</option>
-              <option value="Ophthalmologist">Ophthalmologist</option>
-              <option value="Gynecologist">Gynecologist</option>
-              <option value="Dentist">Dentist</option>
-              <option value="Psychiatrist">Psychiatrist</option>
-              <option value="Other">Other</option>
+              <option value="">Select specialty…</option>
+              {["General Physician","Cardiologist","Dermatologist","Pediatrician","Orthopedic","Neurologist","ENT Specialist","Ophthalmologist","Gynecologist","Dentist","Psychiatrist","Other"].map(s => (
+                <option key={s}>{s}</option>
+              ))}
             </select>
           </div>
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button variant="outline" onClick={() => setIsAddDoctorOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddDoctor} disabled={!newDoctor.name || addingDoctor}>
-              {addingDoctor ? 'Adding...' : 'Add Doctor'}
-            </Button>
+          <div className="flex justify-end gap-2 pt-4 border-t border-[#f0f0f0]">
+            <button onClick={() => setIsAddDoctorOpen(false)} className="h-9 px-4 rounded-lg border border-[#e5e5e5] text-sm text-[#555] hover:bg-[#f5f5f5] transition-colors">Cancel</button>
+            <button
+              onClick={handleAddDoctor}
+              disabled={!newDoctor.name || addingDoctor}
+              className="h-9 px-4 rounded-lg bg-black text-white text-sm font-medium hover:bg-[#222] transition-colors disabled:opacity-40"
+            >
+              {addingDoctor ? "Adding…" : "Add Doctor"}
+            </button>
           </div>
         </div>
       </Modal>

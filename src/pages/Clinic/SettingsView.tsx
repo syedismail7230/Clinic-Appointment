@@ -1,39 +1,28 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { MapPin, Building, FileText, CheckCircle2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 
 export default function SettingsView() {
-  const [profile, setProfile] = useState({ 
-    name: '', 
-    address: '', 
-    maps_link: '',
-    logo_url: '',
-    gst_number: ''
+  const [profile, setProfile] = useState({
+    name: "", address: "", maps_link: "", logo_url: "", gst_number: "",
   });
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [saved, setSaved]     = useState(false);
 
   useEffect(() => {
     const fetchClinic = async () => {
       try {
-        const data = await api.get('/admin/clinic');
-        setProfile({ 
-          name: data.name || '', 
-          address: data.address || '',
-          maps_link: data.maps_link || '',
-          logo_url: data.logo_url || '',
-          gst_number: data.gst_number || ''
+        const data = await api.get("/admin/clinic");
+        setProfile({
+          name:       data.name || "",
+          address:    data.address || "",
+          maps_link:  data.maps_link || "",
+          logo_url:   data.logo_url || "",
+          gst_number: data.gst_number || "",
         });
-      } catch (error) {
-        console.error('Failed to fetch clinic settings:', error);
-      } finally {
-        setLoading(false);
-      }
+      } catch (err) { console.error(err); } finally { setLoading(false); }
     };
     fetchClinic();
   }, []);
@@ -42,155 +31,151 @@ export default function SettingsView() {
     setSaving(true);
     setSaved(false);
     try {
-      await api.patch('/admin/clinic', profile);
+      await api.patch("/admin/clinic", profile);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (error) {
-      console.error('Failed to update clinic settings:', error);
-    } finally {
-      setSaving(false);
-    }
+    } catch (err) { console.error(err); } finally { setSaving(false); }
   };
 
-  if (loading) return <div className="p-4 text-center">Loading settings...</div>;
+  if (loading) return <div className="text-[13px] text-[#aaa] py-12 text-center">Loading settings…</div>;
+
+  const fieldCls = "w-full h-10 rounded-lg border border-[#e5e5e5] bg-[#fafafa] px-3 text-sm text-[#222] focus:outline-none focus:ring-1 focus:ring-black placeholder:text-[#ccc] transition-all";
+  const labelCls = "block text-[11px] font-semibold uppercase tracking-widest text-[#aaa] mb-1.5";
+
+  const Section = ({ icon: Icon, title, description, children }: {
+    icon: React.ComponentType<{ className?: string }>;
+    title: string;
+    description: string;
+    children: React.ReactNode;
+  }) => (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <Icon className="w-4 h-4 text-[#888]" />
+          <span className="text-[14px] font-semibold text-[#222]">{title}</span>
+        </div>
+        <p className="text-[12px] text-[#aaa]">{description}</p>
+      </div>
+      <div className="md:col-span-2 space-y-4">{children}</div>
+    </div>
+  );
 
   return (
-    <div className="animate-in fade-in duration-300 max-w-3xl">
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900">Clinic Settings</h2>
-        <p className="text-gray-500">Manage your clinic profile and preferences.</p>
+    <div className="animate-in fade-in duration-300 max-w-3xl space-y-8">
+      <div>
+        <h2 className="text-[22px] font-bold tracking-tight text-[#0a0a0a]">Settings</h2>
+        <p className="text-[13px] text-[#999] mt-0.5">Manage your clinic profile and preferences</p>
       </div>
 
-      <div className="space-y-6">
-        {/* Clinic Profile */}
-        <Card className="border-none shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5" /> Clinic Profile</CardTitle>
-            <CardDescription>Update your clinic's public information.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="clinicName">Clinic Name</Label>
-                <Input 
-                  id="clinicName" 
-                  value={profile.name} 
-                  onChange={(e) => setProfile({ ...profile, name: e.target.value })} 
-                  placeholder="e.g. Downtown Medical Center"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="address">Address</Label>
-                <Input 
-                  id="address" 
-                  value={profile.address} 
-                  onChange={(e) => setProfile({ ...profile, address: e.target.value })} 
-                  placeholder="e.g. 123 Main St, Metro City"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* ── Clinic Profile ── */}
+      <Section icon={Building} title="Clinic Profile" description="Your clinic's public-facing information.">
+        <div>
+          <label className={labelCls}>Clinic Name</label>
+          <Input
+            className={fieldCls}
+            placeholder="e.g. Downtown Medical Center"
+            value={profile.name}
+            onChange={e => setProfile({ ...profile, name: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className={labelCls}>Address</label>
+          <Input
+            className={fieldCls}
+            placeholder="e.g. 123 Main St, Metro City"
+            value={profile.address}
+            onChange={e => setProfile({ ...profile, address: e.target.value })}
+          />
+        </div>
+      </Section>
 
-        {/* Location */}
-        <Card className="border-none shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><MapPin className="w-5 h-5" /> Location</CardTitle>
-            <CardDescription>Help patients find your clinic on the map.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="mapsLink">Google Maps Link</Label>
-              <Input 
-                id="mapsLink" 
-                value={profile.maps_link} 
-                onChange={(e) => setProfile({ ...profile, maps_link: e.target.value })} 
-                placeholder="e.g. https://maps.google.com/?q=..."
-              />
-              <p className="text-xs text-gray-500">
-                Open Google Maps, search for your clinic, click "Share" → "Copy Link" and paste it here.
-              </p>
-            </div>
-            {profile.maps_link && (
-              <a 
-                href={profile.maps_link} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline"
-              >
-                <MapPin className="w-3.5 h-3.5" /> Open in Google Maps
-              </a>
-            )}
-          </CardContent>
-        </Card>
+      <hr className="border-[#f0f0f0]" />
 
-        {/* Branding */}
-        <Card className="border-none shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Building className="w-5 h-5" /> Branding</CardTitle>
-            <CardDescription>Customize your clinic's appearance.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="logoUrl">Clinic Logo URL</Label>
-              <Input 
-                id="logoUrl" 
-                value={profile.logo_url} 
-                onChange={(e) => setProfile({ ...profile, logo_url: e.target.value })} 
-                placeholder="e.g. https://yoursite.com/logo.png"
-              />
-              <p className="text-xs text-gray-500">
-                Provide a URL to your clinic's logo image. This will appear on patient-facing pages.
-              </p>
-            </div>
-            {profile.logo_url && (
-              <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl border">
-                <img 
-                  src={profile.logo_url} 
-                  alt="Clinic Logo" 
-                  className="w-16 h-16 object-contain rounded-lg border bg-white"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-                <span className="text-sm text-gray-600">Logo preview</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Business Details */}
-        <Card className="border-none shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><FileText className="w-5 h-5" /> Business Details</CardTitle>
-            <CardDescription>Tax and regulatory information.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="gstNumber">GST Number</Label>
-              <Input 
-                id="gstNumber" 
-                value={profile.gst_number} 
-                onChange={(e) => setProfile({ ...profile, gst_number: e.target.value.toUpperCase() })} 
-                placeholder="e.g. 22AAAAA0000A1Z5"
-                maxLength={15}
-              />
-              <p className="text-xs text-gray-500">
-                Your 15-digit GSTIN. This will appear on invoices and receipts.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Save Button */}
-        <div className="flex items-center gap-3">
-          <Button className="h-11 px-6" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving...' : 'Save All Changes'}
-          </Button>
-          {saved && (
-            <span className="flex items-center gap-1.5 text-green-600 text-sm font-medium animate-in fade-in">
-              <CheckCircle2 className="w-4 h-4" /> Settings updated successfully
-            </span>
+      {/* ── Location ── */}
+      <Section icon={MapPin} title="Location" description="Help patients find your clinic on the map.">
+        <div>
+          <label className={labelCls}>Google Maps Link</label>
+          <Input
+            className={fieldCls}
+            placeholder="https://maps.google.com/?q=..."
+            value={profile.maps_link}
+            onChange={e => setProfile({ ...profile, maps_link: e.target.value })}
+          />
+          <p className="text-[11px] text-[#bbb] mt-1.5">
+            Open Google Maps, find your clinic, click Share → Copy Link and paste here.
+          </p>
+          {profile.maps_link && (
+            <a
+              href={profile.maps_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-[12px] text-[#888] hover:text-black mt-2 transition-colors"
+            >
+              <MapPin className="w-3 h-3" /> Open in Google Maps →
+            </a>
           )}
         </div>
+      </Section>
+
+      <hr className="border-[#f0f0f0]" />
+
+      {/* ── Branding ── */}
+      <Section icon={Building} title="Branding" description="Customise your clinic's appearance on patient-facing pages.">
+        <div>
+          <label className={labelCls}>Clinic Logo URL</label>
+          <Input
+            className={fieldCls}
+            placeholder="https://yoursite.com/logo.png"
+            value={profile.logo_url}
+            onChange={e => setProfile({ ...profile, logo_url: e.target.value })}
+          />
+          {profile.logo_url && (
+            <div className="mt-3 flex items-center gap-3 p-3 bg-[#f8f8f8] border border-[#f0f0f0] rounded-xl">
+              <img
+                src={profile.logo_url}
+                alt="Clinic Logo"
+                className="w-12 h-12 object-contain rounded-lg border border-[#ebebeb] bg-white"
+                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+              <span className="text-[12px] text-[#aaa]">Logo preview</span>
+            </div>
+          )}
+        </div>
+      </Section>
+
+      <hr className="border-[#f0f0f0]" />
+
+      {/* ── Business Details ── */}
+      <Section icon={FileText} title="Business Details" description="Tax and regulatory information for invoices and receipts.">
+        <div>
+          <label className={labelCls}>GST Number</label>
+          <Input
+            className={fieldCls}
+            placeholder="e.g. 22AAAAA0000A1Z5"
+            value={profile.gst_number}
+            onChange={e => setProfile({ ...profile, gst_number: e.target.value.toUpperCase() })}
+            maxLength={15}
+          />
+          <p className="text-[11px] text-[#bbb] mt-1.5">Your 15-digit GSTIN. Appears on invoices and receipts.</p>
+        </div>
+      </Section>
+
+      <hr className="border-[#f0f0f0]" />
+
+      {/* ── Save ── */}
+      <div className="flex items-center gap-4">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="h-10 px-6 rounded-lg bg-black text-white text-sm font-semibold hover:bg-[#222] transition-colors disabled:opacity-40"
+        >
+          {saving ? "Saving…" : "Save All Changes"}
+        </button>
+        {saved && (
+          <span className="flex items-center gap-1.5 text-[13px] text-[#666] animate-in fade-in duration-200">
+            <CheckCircle2 className="w-4 h-4" /> Settings updated
+          </span>
+        )}
       </div>
     </div>
   );
