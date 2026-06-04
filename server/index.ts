@@ -21,6 +21,27 @@ app.use(cors({
 
 app.use(express.json());
 
+const widgetOrigin = 'https://crm.zawrindustries.com';
+const widgetSupportUrl = `${widgetOrigin}/widget/support`;
+
+app.get('/widget/support', async (req: Request, res: Response) => {
+    try {
+        const upstreamResponse = await fetch(widgetSupportUrl);
+        const html = await upstreamResponse.text();
+
+        const rewrittenHtml = html
+            .replace(/(src|href)="\/(?!\/)/g, `$1="${widgetOrigin}/`)
+            .replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/gi, '');
+
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        res.send(rewrittenHtml);
+    } catch (error) {
+        console.error('[Widget Proxy Error]:', error);
+        res.status(502).send('Failed to load support widget.');
+    }
+});
+
 // API Routes
 app.use('/api', routes);
 

@@ -16,9 +16,13 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function run() {
     try {
-        console.log("Fetching tenant 'default-tenant'...");
-        const res1 = await supabase.from('tenants').select('*').eq('id', 'default-tenant').single();
-        console.log("res1:", res1);
+        console.log("Fetching clinics...");
+        const { data, error } = await supabase.from('clinics').select('id, name, lat, lng, address');
+        if (error) {
+            console.error("Error fetching clinics:", error);
+        } else {
+            console.log("Clinics in DB:", JSON.stringify(data, null, 2));
+        }
     } catch (e) {
         console.error("Caught error:", e);
     }
