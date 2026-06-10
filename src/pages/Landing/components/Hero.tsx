@@ -101,7 +101,7 @@ export default function Hero() {
             onClick={() => navigate('/onboard')}
             className="group flex items-center gap-2 bg-teal-400 hover:bg-teal-300 text-[#070710] font-bold text-base px-8 py-4 rounded-full transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(45,212,191,0.3)]"
           >
-            Start Free Trial
+            Get Started
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </button>
           <a

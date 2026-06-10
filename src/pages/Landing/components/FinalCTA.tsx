@@ -46,7 +46,7 @@ export default function FinalCTA() {
                   onClick={() => navigate('/onboard')}
                   className="group flex items-center gap-2 bg-teal-400 hover:bg-teal-300 text-[#070710] font-bold text-base px-10 py-4 rounded-full transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(45,212,191,0.3)]"
                 >
-                  Start Free Trial — ₹999/mo
+                  Get Started — ₹999/mo
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
                 <a

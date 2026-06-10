@@ -90,7 +90,7 @@ export default function Pricing() {
                 onClick={() => navigate('/onboard')}
                 className="group w-full md:w-auto flex items-center justify-center gap-2 bg-teal-400 hover:bg-teal-300 text-[#070710] font-bold text-base px-10 py-4 rounded-full transition-all hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(45,212,191,0.25)]"
               >
-                Start Free Trial
+                Get Started
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </button>
               <p className="text-white/30 text-xs mt-4 text-center md:text-left">No credit card required to start</p>
