@@ -17,7 +17,15 @@ export default function PatientRecords() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Filter queue items that are completed and match the phone number
-  const records = queue.filter(q => q.status === 'completed' && q.phone === phone);
+  const records = queue.filter(q => {
+    const qDigits = q.phone.replace(/\D/g, '');
+    const qTen = qDigits.length === 12 && qDigits.startsWith('91') ? qDigits.slice(2) : qDigits;
+    
+    const pDigits = phone.replace(/\D/g, '');
+    const pTen = pDigits.length === 12 && pDigits.startsWith('91') ? pDigits.slice(2) : pDigits;
+    
+    return q.status === 'completed' && qTen === pTen;
+  });
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +46,12 @@ export default function PatientRecords() {
     if (otp.length !== 6) return;
     setIsSubmitting(true);
     try {
-      await api.post("/auth/otp/verify", { phone: phone.trim(), code: otp });
+      const res = await api.post("/auth/otp/verify", { phone: phone.trim(), code: otp });
+      if (res && res.token) {
+        localStorage.setItem("token", res.token);
+        // Force the useQueue hook to fetch again with the newly set token
+        window.dispatchEvent(new Event('queue_updated'));
+      }
       setStep("records");
     } catch (err: any) {
       console.error("OTP verify failed:", err);

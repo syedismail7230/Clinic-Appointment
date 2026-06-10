@@ -36,13 +36,14 @@ const STATUS_CLS: Record<string, string> = {
   cancelled:       "bg-transparent text-[#aaa] border border-[#ebebeb]",
 };
 
-function StatusBadge({ status, onClick }: { status: string; onClick?: () => void }) {
+function StatusBadge({ status, onClick, disabled }: { status: string; onClick?: () => void; disabled?: boolean }) {
   const cls = STATUS_CLS[status] ?? "bg-[#f0f0f0] text-[#666]";
   return (
     <button
       onClick={onClick}
-      title={onClick ? "Click to advance status" : undefined}
-      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wide transition-opacity ${cls} ${onClick ? "hover:opacity-70 cursor-pointer" : "cursor-default"}`}
+      disabled={disabled}
+      title={onClick && !disabled ? "Click to advance status" : undefined}
+      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wide transition-opacity ${cls} ${onClick ? "hover:opacity-70 cursor-pointer" : "cursor-default"} ${disabled ? "opacity-40 cursor-not-allowed pointer-events-none" : ""}`}
     >
       {STATUS_LABEL[status] ?? status}
     </button>
@@ -86,11 +87,19 @@ export default function AppointmentsView() {
     })
     .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
 
+  const [updatingIds, setUpdatingIds] = useState<string[]>([]);
+
   const updateStatus = async (id: string, newStatus: string) => {
+    if (updatingIds.includes(id)) return;
+    setUpdatingIds(prev => [...prev, id]);
     try {
       await api.patch(`/appointments/${id}`, { status: newStatus });
       fetchAppointments();
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setUpdatingIds(prev => prev.filter(x => x !== id));
+    }
   };
 
   const cycleStatus = (apt: any) => updateStatus(apt.id, STATUS_CYCLE[apt.status] ?? "booked");
@@ -233,7 +242,7 @@ export default function AppointmentsView() {
                     </td>
                     <td className="px-5 py-4 text-[#666] text-[13px]">{apt.doctor}</td>
                     <td className="px-5 py-4">
-                      <StatusBadge status={apt.status} onClick={() => cycleStatus(apt)} />
+                      <StatusBadge status={apt.status} onClick={() => cycleStatus(apt)} disabled={updatingIds.includes(apt.id)} />
                     </td>
                     <td className="px-5 py-4 text-right">
                       <button

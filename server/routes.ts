@@ -252,7 +252,9 @@ router.get('/queue', optionalAuthenticateToken, async (req: any, res: any) => {
         query = query.eq('tenant_id', req.user.tenant_id).eq('date', targetDate);
     } else if (req.user?.role === 'patient' && req.user?.phone) {
         // Patients see all their bookings (current + past) for their records page
-        query = query.eq('phone', req.user.phone);
+        const digits = req.user.phone.replace(/\D/g, '');
+        const tenDigit = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
+        query = query.or(`phone.eq.${req.user.phone},phone.eq.${tenDigit}`);
     } else if (req.query.tenantId) {
         // Public booking flow — target date for the specific clinic
         query = query.eq('tenant_id', req.query.tenantId).eq('date', targetDate);
@@ -371,11 +373,12 @@ router.post('/queue', optionalAuthenticateToken, async (req: any, res) => {
         });
         
         // Upsert patient
-        const { data: existingPatient } = await supabase.from('patients').select('*').eq('tenant_id', tenantId).eq('phone', phone).single();
+        const { data: existingPatients } = await supabase.from('patients').select('*').eq('tenant_id', tenantId).eq('phone', phone).limit(1);
+        const existingPatient = existingPatients && existingPatients.length > 0 ? existingPatients[0] : null;
         
         if (!existingPatient) {
             await supabase.from('patients').insert({
-                id: uuidv4(), tenant_id: tenantId, name: patientName, phone, last_visit: new Date().toISOString()
+                id: uuidv4(), tenant_id: tenantId, name: patientName, phone, last_visit: new Date().toISOString(), totalVisits: 1
             });
         } else {
             const currentVisits = existingPatient.totalVisits || 1;

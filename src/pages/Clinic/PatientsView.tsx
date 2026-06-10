@@ -47,8 +47,8 @@ export default function PatientsView() {
       if (!existing) {
         map.set(key, { ...p });
       } else {
-        // keep the higher visit count
-        existing.totalVisits = Math.max(existing.totalVisits ?? 1, p.totalVisits ?? 1);
+        // sum the visit counts of duplicates
+        existing.totalVisits = (existing.totalVisits ?? 1) + (p.totalVisits ?? 1);
         // keep the most recent last_visit
         if (p.last_visit && (!existing.last_visit || p.last_visit > existing.last_visit)) {
           existing.last_visit = p.last_visit;

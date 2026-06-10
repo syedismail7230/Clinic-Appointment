@@ -120,20 +120,39 @@ export default function QueueView() {
     else { setSortField(f); setSortDir("asc"); }
   };
 
+  const [isAddingWalkIn, setIsAddingWalkIn] = useState(false);
+  const [isSavingComplete, setIsSavingComplete] = useState(false);
+  const [updatingIds, setUpdatingIds] = useState<string[]>([]);
+
   const handleUpdateStatus = async (id: string, newStatus: string) => {
     if (newStatus === "completed") {
       setSelectedPatientId(id);
       setPrescription("");
       setMedicines([]);
     } else {
-      await updateQueueItem(id, { status: newStatus });
+      if (updatingIds.includes(id)) return;
+      setUpdatingIds(prev => [...prev, id]);
+      try {
+        await updateQueueItem(id, { status: newStatus });
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setUpdatingIds(prev => prev.filter(x => x !== id));
+      }
     }
   };
 
   const handleCompleteConsultation = async () => {
-    if (selectedPatientId) {
-      await updateQueueItem(selectedPatientId, { status: "completed", prescription, medicines });
-      setSelectedPatientId(null);
+    if (selectedPatientId && !isSavingComplete) {
+      setIsSavingComplete(true);
+      try {
+        await updateQueueItem(selectedPatientId, { status: "completed", prescription, medicines });
+        setSelectedPatientId(null);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsSavingComplete(false);
+      }
     }
   };
 
@@ -142,21 +161,28 @@ export default function QueueView() {
   const removeMedicine = (id: string) => setMedicines(medicines.filter(m => m.id !== id));
 
   const handleWalkInSubmit = async () => {
-    if (!walkInForm.name || !walkInForm.phone || !walkInForm.doctor) return;
-    await addQueueItem({
-      id: `q${Date.now()}`,
-      patientName: walkInForm.name,
-      phone: walkInForm.phone,
-      status: "waiting",
-      doctor: walkInForm.doctor,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      waitTime: "10 mins",
-      prescription: "",
-      medicines: [],
-      date: getLocalDateStr(),
-    });
-    setIsWalkInOpen(false);
-    setWalkInForm({ name: "", phone: "", doctor: "" });
+    if (!walkInForm.name || !walkInForm.phone || !walkInForm.doctor || isAddingWalkIn) return;
+    setIsAddingWalkIn(true);
+    try {
+      await addQueueItem({
+        id: `q${Date.now()}`,
+        patientName: walkInForm.name,
+        phone: walkInForm.phone,
+        status: "waiting",
+        doctor: walkInForm.doctor,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        waitTime: "10 mins",
+        prescription: "",
+        medicines: [],
+        date: getLocalDateStr(),
+      });
+      setIsWalkInOpen(false);
+      setWalkInForm({ name: "", phone: "", doctor: "" });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsAddingWalkIn(false);
+    }
   };
 
   const avgWait = () => {
@@ -323,25 +349,28 @@ export default function QueueView() {
                       {item.status === "booked" && (
                         <button
                           onClick={() => handleUpdateStatus(item.id, "waiting")}
-                          className="text-[12px] font-medium text-[#555] hover:text-black transition-colors"
+                          disabled={updatingIds.includes(item.id)}
+                          className="text-[12px] font-medium text-[#555] hover:text-black transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                          Mark Arrived
+                          {updatingIds.includes(item.id) ? "Marking..." : "Mark Arrived"}
                         </button>
                       )}
                       {item.status === "waiting" && (
                         <button
                           onClick={() => handleUpdateStatus(item.id, "in-consultation")}
-                          className="text-[12px] font-medium text-black hover:underline"
+                          disabled={updatingIds.includes(item.id)}
+                          className="text-[12px] font-medium text-black hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                          Start Consult
+                          {updatingIds.includes(item.id) ? "Starting..." : "Start Consult"}
                         </button>
                       )}
                       {item.status === "in-consultation" && (
                         <button
                           onClick={() => handleUpdateStatus(item.id, "completed")}
-                          className="text-[12px] font-medium text-black hover:underline"
+                          disabled={updatingIds.includes(item.id)}
+                          className="text-[12px] font-medium text-black hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                          Complete
+                          {updatingIds.includes(item.id) ? "Completing..." : "Complete"}
                         </button>
                       )}
                       <button
@@ -497,8 +526,10 @@ export default function QueueView() {
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t border-[#f0f0f0]">
-            <button onClick={() => setSelectedPatientId(null)} className="h-9 px-4 rounded-lg border border-[#e5e5e5] text-sm text-[#555] hover:bg-[#f5f5f5] transition-colors">Cancel</button>
-            <button onClick={handleCompleteConsultation} className="h-9 px-4 rounded-lg bg-black text-white text-sm font-medium hover:bg-[#222] transition-colors">Save & Complete</button>
+            <button onClick={() => setSelectedPatientId(null)} disabled={isSavingComplete} className="h-9 px-4 rounded-lg border border-[#e5e5e5] text-sm text-[#555] hover:bg-[#f5f5f5] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Cancel</button>
+            <button onClick={handleCompleteConsultation} disabled={isSavingComplete} className="h-9 px-4 rounded-lg bg-black text-white text-sm font-medium hover:bg-[#222] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              {isSavingComplete ? "Saving..." : "Save & Complete"}
+            </button>
           </div>
         </div>
       </Modal>
@@ -531,13 +562,13 @@ export default function QueueView() {
             </select>
           </div>
           <div className="flex justify-end gap-2 pt-4 border-t border-[#f0f0f0]">
-            <button onClick={() => setIsWalkInOpen(false)} className="h-9 px-4 rounded-lg border border-[#e5e5e5] text-sm text-[#555] hover:bg-[#f5f5f5] transition-colors">Cancel</button>
+            <button onClick={() => setIsWalkInOpen(false)} disabled={isAddingWalkIn} className="h-9 px-4 rounded-lg border border-[#e5e5e5] text-sm text-[#555] hover:bg-[#f5f5f5] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Cancel</button>
             <button
               onClick={handleWalkInSubmit}
-              disabled={!walkInForm.name || !walkInForm.phone || !walkInForm.doctor}
+              disabled={!walkInForm.name || !walkInForm.phone || !walkInForm.doctor || isAddingWalkIn}
               className="h-9 px-4 rounded-lg bg-black text-white text-sm font-medium hover:bg-[#222] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Add to Queue
+              {isAddingWalkIn ? "Adding..." : "Add to Queue"}
             </button>
           </div>
         </div>
