@@ -1,7 +1,25 @@
 import { useState, useEffect } from "react";
-import { MapPin, Building, FileText, CheckCircle2 } from "lucide-react";
+import { MapPin, Building, FileText, CheckCircle2, Lock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
+
+const Section = ({ icon: Icon, title, description, children }: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) => (
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <Icon className="w-4 h-4 text-[#888]" />
+        <span className="text-[14px] font-semibold text-[#222]">{title}</span>
+      </div>
+      <p className="text-[12px] text-[#aaa]">{description}</p>
+    </div>
+    <div className="md:col-span-2 space-y-4">{children}</div>
+  </div>
+);
 
 export default function SettingsView() {
   const [profile, setProfile] = useState({
@@ -10,6 +28,12 @@ export default function SettingsView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
+
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordSaved, setPasswordSaved] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
 
   useEffect(() => {
     const fetchClinic = async () => {
@@ -37,28 +61,41 @@ export default function SettingsView() {
     } catch (err) { console.error(err); } finally { setSaving(false); }
   };
 
+  const handleSavePassword = async () => {
+    if (!password) {
+      setPasswordError("Password cannot be empty");
+      return;
+    }
+    if (password.length < 6) {
+      setPasswordError("Password must be at least 6 characters");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setPasswordError("Passwords do not match");
+      return;
+    }
+
+    setPasswordSaving(true);
+    setPasswordError("");
+    setPasswordSaved(false);
+    try {
+      await api.post("/admin/change-password", { password });
+      setPasswordSaved(true);
+      setPassword("");
+      setConfirmPassword("");
+      setTimeout(() => setPasswordSaved(false), 3000);
+    } catch (err: any) {
+      setPasswordError("Failed to update password. Please try again.");
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   if (loading) return <div className="text-[13px] text-[#aaa] py-12 text-center">Loading settings…</div>;
 
   const fieldCls = "w-full h-10 rounded-lg border border-[#e5e5e5] bg-[#fafafa] px-3 text-sm text-[#222] focus:outline-none focus:ring-1 focus:ring-black placeholder:text-[#ccc] transition-all";
   const labelCls = "block text-[11px] font-semibold uppercase tracking-widest text-[#aaa] mb-1.5";
 
-  const Section = ({ icon: Icon, title, description, children }: {
-    icon: React.ComponentType<{ className?: string }>;
-    title: string;
-    description: string;
-    children: React.ReactNode;
-  }) => (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div>
-        <div className="flex items-center gap-2 mb-1">
-          <Icon className="w-4 h-4 text-[#888]" />
-          <span className="text-[14px] font-semibold text-[#222]">{title}</span>
-        </div>
-        <p className="text-[12px] text-[#aaa]">{description}</p>
-      </div>
-      <div className="md:col-span-2 space-y-4">{children}</div>
-    </div>
-  );
 
   return (
     <div className="animate-in fade-in duration-300 max-w-3xl space-y-8">
@@ -157,6 +194,53 @@ export default function SettingsView() {
             maxLength={15}
           />
           <p className="text-[11px] text-[#bbb] mt-1.5">Your 15-digit GSTIN. Appears on invoices and receipts.</p>
+        </div>
+      </Section>
+
+      <hr className="border-[#f0f0f0]" />
+
+      {/* ── Security ── */}
+      <Section icon={Lock} title="Security" description="Set or change your login password.">
+        <div className="space-y-4">
+          {passwordError && (
+            <div className="p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-medium">
+              {passwordError}
+            </div>
+          )}
+          {passwordSaved && (
+            <div className="p-3 bg-green-50 border border-green-100 text-green-600 rounded-xl text-xs font-medium">
+              Password updated successfully!
+            </div>
+          )}
+          <div>
+            <label className={labelCls}>New Password</label>
+            <Input
+              type="password"
+              className={fieldCls}
+              placeholder="Min 6 characters"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Confirm Password</label>
+            <Input
+              type="password"
+              className={fieldCls}
+              placeholder="Confirm new password"
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+            />
+          </div>
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={handleSavePassword}
+              disabled={passwordSaving || !password || !confirmPassword}
+              className="h-9 px-4 rounded-lg bg-black text-white text-[12px] font-semibold hover:bg-[#222] transition-colors disabled:opacity-40"
+            >
+              {passwordSaving ? "Updating…" : "Update Password"}
+            </button>
+          </div>
         </div>
       </Section>
 

@@ -631,6 +631,28 @@ router.patch('/admin/clinic', authenticateToken, async (req: any, res) => {
     res.json({ success: true });
 });
 
+router.post('/admin/change-password', authenticateToken, async (req: any, res) => {
+    const { password } = req.body;
+    if (!password || password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+    
+    try {
+        const hashedPassword = await hashPassword(password);
+        const { error } = await supabase
+            .from('users')
+            .update({ password_hash: hashedPassword })
+            .eq('id', req.user.id);
+            
+        if (error) throw error;
+        
+        res.json({ success: true });
+    } catch (error: any) {
+        console.error('[Admin] Change password error:', error.message);
+        res.status(500).json({ error: 'Failed to update password' });
+    }
+});
+
 // Patient History
 router.get('/patients/:phone/history', authenticateToken, async (req: any, res) => {
     const tenantId = req.user.tenant_id;
